@@ -22,7 +22,7 @@ void SetupCommunicationTcpServer()
 		Utilise pour l'echange de data entre client et serveur.
 	-fd_set reafds:
 		Ensemble des fds(master/clients) que select() va interroger.
-	-serveur/client_addr:
+	-server/client_addr:
 		Contient les infos serveur/client.
 		struct sockaddr_in
 		{
@@ -41,8 +41,7 @@ void SetupCommunicationTcpServer()
 	-opt:
 		Contient le numero correspondant a l'option du socket set par setsockopt.
 */
-	int master_sock_tcp_fd = 0, sent_recv_bytes = 0, opt = 1;
-	int comm_socket_fd = 0;
+	int master_sock_tcp_fd = 0, comm_socket_fd = 0, sent_recv_bytes = 0, opt = 1;
 	fd_set readfds;
 	struct sockaddr_in server_addr, client_addr;
 	server_addr.sin_family = AF_INET;
@@ -55,15 +54,15 @@ void SetupCommunicationTcpServer()
 #####################2.Creation du master socket.#
 ##################################################
 */
-	if (master_sock_tcp_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) == - 1)
+	if (master_sock_tcp_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) == -1)
 	{
 		printf("socket creation failed\n");
 		exit(EXIT_FAILURE);
 	}
 	/* 
 		AF_INET: Famille d'adresse IPV4
-		SOCK_STREAM:
-		IPPROTO_TCP:
+		SOCK_STREAM: Socket de type tcp
+		IPPROTO_TCP: Type de protocole tcp
 	*/
 	if (setsockopt(master_sock_tcp_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) < 0)
 	{
@@ -72,23 +71,23 @@ void SetupCommunicationTcpServer()
 	}
 	/*
 	* setsockopt()
-	* permet de contrôler divers comportements du socket comme
-	* la réutilisation des adresses ect.
+	* permet de controler divers comportements du socket comme
+	* la reutilisation des adresses ect.
 	*/
 	/*
 		SOL_SOCKET (int):
 			Specifie le niveau de l'option,
-			l'option s'applique au niveau du socket lui-même,
+			l'option s'applique au niveau du socket lui-meme,
 			plutot qu'a un niveau protocolaire comme TCP ou UDP.
 
 		SO_REUSEADDR (int):
 			Permet la reutilisation des adresses:ports locales si elles sont en attente,
-			(dans un etat de "TIME_WAIT", usuelement après la fermeture d'un socket).
-			Utile pour les serveurs qui redémarrent rapidement,
+			(dans un etat de "TIME_WAIT", usuelement apres la fermeture d'un socket).
+			Utile pour les serveurs qui redemarrent rapidement,
 			et qui doivent se lier a un port specifique immediatement apres une fermeture.
 
 		(char*)&opt (void*):
-			Contient la nouvelle valeur pour l'option spécifiée.
+			Contient la nouvelle valeur pour l'option specifiee.
 
 		sizeof(opt) (socklen_t): taille de la variable pointee.
 
@@ -109,14 +108,21 @@ bind() est un syscall permetant de dire a l'os quel type de donnees notre serveu
 ###################################################################
 #####################4.Definir le nombre max de connexions client.#
 ###################################################################
+Lorsque des requetes de plusieurs clients arrivent meme temps,
+une queue de n(second argument de listen) clients les stokera.
+Les autres requetes n+x sont ignorees.
 */
-    if (listen(master_sock_tcp_fd, 5) < 0)  
+    if (listen(master_sock_tcp_fd, 5) < 0)
     {
         printf("listen failed\n");
         return;
     }
 
 //Boucle infinie du serveur pour detecter/accepter et servir le client innocent.😈
+while(1)
+{
+	
+}
 /*
 #####################5.
 */
