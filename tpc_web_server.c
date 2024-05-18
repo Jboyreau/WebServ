@@ -1,15 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/select.h> //type fd_set;
-#include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR;
+#include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR; inet_ntoa();
 #include <netinet/in.h> //IPPROTO_TCP;
+#include <arpa/inet.h>	//ntohs;
+#include <string.h> //memeset();
 #include <netdb.h>
 #include <memory.h>
 #include <errno.h>
+#include "data_format.h"
 
 #define SERVER_PORT 2000
+#define BUFFER_SIZE 1024
 
-void SetupCommunicationTcpServer()
+void SetupCommunicationTcpServer(char* data_buffer)
 {
 /*
 #######################################
@@ -48,13 +52,14 @@ void SetupCommunicationTcpServer()
 	server_addr.sin_port = htons(SERVER_PORT);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 	int addr_len = sizeof(struct sockaddr);
-
+	operand_t client_data;
+	result_t server_data;
 /*
 ##################################################
 #####################2.Creation du master socket.#
 ##################################################
 */
-	if (master_sock_tcp_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) == -1)
+	if ((master_sock_tcp_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
 	{
 		printf("socket creation failed\n");
 		exit(EXIT_FAILURE);
@@ -97,7 +102,7 @@ void SetupCommunicationTcpServer()
 ####################################################
 #####################3.Specifier les infos serveur.#
 ####################################################
-bind() est un syscall permetant de dire a l'os quel type de donnees notre serveur attends.
+bind() est un syscall permetant de dire a l'os quel type de donnees notre serveur attend.
 */
 	if (bind(master_sock_tcp_fd, (struct sockaddr *)&server_addr, sizeof(struct sockaddr)) == -1)
     {
@@ -118,38 +123,123 @@ Les autres requetes n+x sont ignorees.
         return;
     }
 
-//Boucle infinie du serveur pour detecter/accepter et servir le client innocent.😈
-while(1)
-{
-	
-}
-/*
-#####################5.
-*/
+	//Boucle infinie du serveur pour detecter/accepter et servir le client innocent.😈
+	while(1)
+	{
+		/*####################################################
+		#####################5.Initialiser et remplir readfds#
+		######################################################*/
+		FD_ZERO(&readfds); //vide readfds
+		FD_SET(master_sock_tcp_fd, &readfds); //ajoute master_sock_tcp_fd
 
-/*
-#####################6.
-*/
-
-/*
-#####################7.
-*/
-
-/*
-#####################8.
-*/
-
-/*
-#####################9.
-*/
-
-/*
-#####################10.
-*/
+		/*#####################################################
+		#####################6.Attendre la connexion du client#
+		#######################################################*/
+		select(master_sock_tcp_fd + 1, &readfds, NULL, NULL, NULL);
+		/*
+			ATTENTION: select() est bloquant!!!
+			select() se debloque lorsque le programme recoit:
+				-demande de connexion d'un client
+				-requete d'un client
+			Arg1: 1 + valeur max presente dans readfds.
+			Arg2: collection des fd du socket.
+			Arg3: ...
+			Arg4: ...
+			Arg5: ...
+		*/
+		/*
+			Condition verifiant une demande de communication d'un client.
+			Si un client demande le droit de parler avec le serveur,
+			le master_sock_tcp_fd s'active.
+			FD_ISSET(master_sock_tcp_fd, readfds) verifie cela.
+		*/
+		if (FD_ISSET(master_sock_tcp_fd, &readfds))
+		{
+			printf("New connection recvd\n");
+			/*#######################################################
+			#####################7.Accepter la demande de connection#
+			#########################################################
+			accept() renvoie un nouveau fd temporaire permettant d'identifier le client.*/
+			comm_socket_fd = accept(master_sock_tcp_fd, (struct sockaddr *)&client_addr, &addr_len);
+			if (comm_socket_fd < 0)
+			{
+				printf("accept error : errno = %d\n", errno);
+				exit(EXIT_FAILURE);
+			}
+			printf(
+				"Connection accepted from client : %s:%u\n",
+				inet_ntoa(client_addr.sin_addr),
+				ntohs(client_addr.sin_port));
+			/*
+				Boucle de communication avec le client,
+				elle se termine si le client envoit une donnee specifique.
+			*/
+			while (1)
+			{
+				printf("clear buffer.\n");
+				memset(data_buffer, 0, BUFFER_SIZE);
+				/*############################################################
+				#####################8.Server recieving the data from client.#
+				##############################################################
+				L'IP & PORT sont stockes dans client_addr par l'os.
+				Le serveur utilisera les infos du client pour repondre.
+				ATTENTION!!! recvfrom() est bloquant.
+				*/
+				sent_recv_bytes = recvfrom(
+					comm_socket_fd,
+					(char*)data_buffer,
+					BUFFER_SIZE,
+					0,
+					(struct sockaddr*)&client_addr, &addr_len);
+				printf(
+					"Server ready to recv %d bytes from client %s:%u\n",
+					sent_recv_bytes,
+					inet_ntoa(client_addr.sin_addr),
+					ntohs(client_addr.sin_port));
+				//Caster le contenu du buffer pour le lire.
+				client_data = *((operand_t*)data_buffer);
+				/*#########################################################
+				#####################9.Verifier la fin de la communication#
+				###########################################################*/
+				if (sent_recv_bytes == 0)
+				{
+					//si le mesg du client est vide, on revient a l'etape 5.
+					printf(
+						"-------------Communication ended by EMPTY MESSAGE with Client %s:%u\n",
+						inet_ntoa(client_addr.sin_addr),
+						ntohs(client_addr.sin_port));
+					close(comm_socket_fd);
+					break;
+				}
+				else if (client_data.a == 0 && client_data.b == 0)
+				{
+					printf(
+						"-------------Communication ended by SPECIAL VALUE with Client %s:%u\n",
+						inet_ntoa(client_addr.sin_addr),
+						ntohs(client_addr.sin_port));
+					close(comm_socket_fd);
+					break;
+				}
+				server_data.c = client_data.a + client_data.b;
+				//Servir le client
+				sent_recv_bytes = sendto(comm_socket_fd,
+					(char*)&server_data,
+					sizeof(server_data),
+					0,
+					(struct sockaddr*)&client_addr,
+					sizeof(struct sockaddr));
+			}
+		}
+		/*#################################################
+		#####################10.Attendre un nouveau client#
+		###################################################
+		GoTo step 5*/
+	}
 }
 
 int main(void)
 {
-	void SetupCommunicationTcpServer();
+	char data_buffer[BUFFER_SIZE];
+	SetupCommunicationTcpServer(data_buffer);
 	return EXIT_SUCCESS;
 }
