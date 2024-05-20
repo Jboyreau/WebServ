@@ -267,7 +267,7 @@ Les autres requetes n+x sont ignorees.
 							ntohs(client_addr.sin_port));
 						close(comm_socket_fd); // effacer client fd.
 						*(fds_buffer + i) = -1;
-						continue;
+						break;
 					}
 					else if (client_data.a == 0 && client_data.b == 0)
 					{
@@ -277,7 +277,7 @@ Les autres requetes n+x sont ignorees.
 							ntohs(client_addr.sin_port));
 						close(comm_socket_fd);
 						*(fds_buffer + i) = -1; //effacer client fd.
-						continue;
+						break;
 					}
 					server_data.c = client_data.a + client_data.b;
 					//Servir le client
