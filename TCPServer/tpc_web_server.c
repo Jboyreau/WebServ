@@ -13,6 +13,7 @@
 
 #define SERVER_PORT 2000
 #define BUFFER_SIZE 1024
+#define MAX_REQUEST 5
 
 void SetupCommunicationTcpServer(char* data_buffer)
 {
@@ -118,7 +119,7 @@ Lorsque des requetes de plusieurs clients arrivent meme temps,
 une queue de n(second argument de listen) clients les stokera.
 Les autres requetes n+x sont ignorees.
 */
-    if (listen(master_sock_tcp_fd, 5) < 0)
+    if (listen(master_sock_tcp_fd, MAX_REQUEST) < 0)
     {
         printf("listen failed\n");
         return;
