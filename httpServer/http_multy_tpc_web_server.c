@@ -353,14 +353,6 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 
 int main(void)
 {
-	student_t student[5] =
-	{
-    	{"Abhishek", 10305042, "Programming", "CSE"},
-    	{"Nitin", 10305048, "Programming", "CSE"},
-    	{"Avinash", 10305041, "Cricket", "ECE"},
-    	{"Jack", 10305032, "Udemy Teaching", "Mechanical"},
-    	{"Cris", 10305030, "Programming", "Electrical"}
-	};
 	char http_header_buffer[BUFFER_SIZE];
 	int  fds_buffer[MAX_CLIENT];
 	SetupCommunicationTcpServer(http_header_buffer, fds_buffer);
