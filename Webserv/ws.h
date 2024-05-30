@@ -34,7 +34,7 @@ typedef struct ServerConfig_s
 {
 	int listen_port;
 	std::string host;
-	std::vector<std::string> server_names;
+	std::string server_names;
 	std::string error_page;
 	int client_max_body_size;
  	std::unordered_map<std::string, Location_t> location;
