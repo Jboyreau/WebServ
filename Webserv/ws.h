@@ -20,20 +20,24 @@
 
 #define CNF_PATH "./cnf/cnf.txt"
 
-typedef struct ServerConfig 
+typedef struct Location_s
+{
+    std::string limit_except;
+    std::string return_path;
+    std::string root;
+    bool autoindex;
+    std::string index_file;
+    std::string cgi_path;
+} Location_t;
+
+typedef struct ServerConfig_s 
 {
 	int listen_port;
 	std::string host;
 	std::vector<std::string> server_names;
 	std::string error_page;
 	int client_max_body_size;
-	std::string location_path;
-	std::string limit_except;
-	std::string return_path;
-	std::string root;
-	bool autoindex;
-	std::string index_file;
-	std::string cgi_path;
-};
+ 	std::unordered_map<std::string, Location_t> location;
+}ServerConfig_t;
 
 #endif
