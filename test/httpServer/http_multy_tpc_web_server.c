@@ -1,3 +1,4 @@
+#include <sys/time.h> //struct timeval
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -100,6 +101,9 @@ void SetupCommunicationTcpServer(char* http_header_buffer, int* fds_buffer)
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 	int addr_len = sizeof(struct sockaddr);
 	char html_txt[10000];
+	struct timeval timeout;
+	timeout.tv_sec = 0; // 0 secondes
+	timeout.tv_usec = 0; // 0 microsecondes	
 
 /*MULTIPLEXING!!!!
 ##########################################################
@@ -213,7 +217,7 @@ Les autres requetes n+x sont ignorees.
 		/*#####################################################
 		#####################6.Attendre la connexion du client#
 		#######################################################*/
-		select(get_max_fd(fds_buffer) + 1, &readfds, &writefds, &exceptfds, NULL);
+		select(get_max_fd(fds_buffer) + 1, &readfds, &writefds, &exceptfds, &timeout);
 		/*
 			ATTENTION: select() est bloquant!!!
 			select() se debloque lorsque le programme recoit:
