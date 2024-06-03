@@ -93,7 +93,7 @@ void SetupCommunicationTcpServer(char* http_header_buffer, int* fds_buffer)
 		Contient le numero correspondant a l'option du socket set par setsockopt.
 */
 	int master_sock_tcp_fd = 0, comm_socket_fd = 0, sent_recv_bytes = 0, opt = 1;
-	fd_set readfds;
+	fd_set readfds, writefds, exceptfds;
 	struct sockaddr_in server_addr, client_addr;
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(SERVER_PORT);
@@ -190,7 +190,7 @@ Les autres requetes n+x sont ignorees.
 	{
 		*fds_buffer = master_sock_tcp_fd;
 	}
-	//Boucle infinie du serveur pour detecter/accepter et servir le client innocent.😈
+	//Boucle infinie du serveur pour detecter/accepter et servir le client.
 	while(1)
 	{
 		/*MULTIPLEXING!!!
@@ -200,14 +200,20 @@ Les autres requetes n+x sont ignorees.
 		On copy fds_buffer dans readfds apres l'avoir reinitialise*/
 		{
 			FD_ZERO(&readfds); //vide readfds
+			FD_ZERO(&writefds); //vide writefds
+			FD_ZERO(&exceptfds); //vide exceptfds
 			for (int i = 0; i < MAX_CLIENT; ++i)
 				if (*(fds_buffer + i) != -1)
+				{
 					FD_SET(*(fds_buffer + i), &readfds);
+					FD_SET(*(fds_buffer + i), &writefds);
+					FD_SET(*(fds_buffer + i), &exceptfds);
+				}
 		}
 		/*#####################################################
 		#####################6.Attendre la connexion du client#
 		#######################################################*/
-		select(get_max_fd(fds_buffer) + 1, &readfds, NULL, NULL, NULL);
+		select(get_max_fd(fds_buffer) + 1, &readfds, &writefds, &exceptfds, NULL);
 		/*
 			ATTENTION: select() est bloquant!!!
 			select() se debloque lorsque le programme recoit:
@@ -264,7 +270,13 @@ Les autres requetes n+x sont ignorees.
 			*/
 			for (int i = 1; i < MAX_CLIENT; ++i)
 			{
-				if (FD_ISSET(*(fds_buffer + i), &readfds))
+				if (FD_ISSET(*(fds_buffer + i), &exceptfds))
+				{
+					printf("Exception on client %d\n", *(fds_buffer + i));
+                    close(*(fds_buffer + i));
+                    *(fds_buffer + i) = -1;
+				}
+				else if (FD_ISSET(*(fds_buffer + i), &readfds))
 				{
 					comm_socket_fd = *(fds_buffer + i);
 					printf("clear buffer.\n");
@@ -315,9 +327,8 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 					//Servir le client
 					strcpy(html_txt, "HTTP/1.1 200 OK\n");
 					strcat(html_txt, "Server: My Personal HTTP Server\n");
-					strcat(html_txt, "Content-Length: ");
+					strcat(html_txt, "Content-Length: 1960\n");
 					strcat(html_txt, "Connection: close\n"); 
-					strcat(html_txt, "2048");
 					strcat(html_txt, "\n");
 					strcat(html_txt, "Content-Type: text/html; charset=UTF-8\n");
 					strcat(html_txt, "\n");
@@ -335,12 +346,22 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 						default :
 							error_methode(html_txt + strlen(html_txt));
 					}
-					sent_recv_bytes = sendto(comm_socket_fd,
-						html_txt,
-						strlen(html_txt),
-						0,
-						(struct sockaddr*)&client_addr,
-						sizeof(struct sockaddr));
+					int index;
+					for (index = strlen(html_txt); index < 2048; ++index)
+						*(html_txt + index) = '.';
+					*(html_txt + index) = 0;
+					if (FD_ISSET(comm_socket_fd, &writefds))
+					{
+						sent_recv_bytes = sendto(comm_socket_fd,
+								html_txt,
+								2048,
+								0,
+								(struct sockaddr*)&client_addr,
+								sizeof(struct sockaddr));
+						printf("##########sent_recv_bytes = %d\n", sent_recv_bytes);
+					}
+					close(comm_socket_fd);
+					*(fds_buffer + i) = -1;
 				}
 			}
 		}
