@@ -327,9 +327,8 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 					//Servir le client
 					strcpy(html_txt, "HTTP/1.1 200 OK\n");
 					strcat(html_txt, "Server: My Personal HTTP Server\n");
-					strcat(html_txt, "Content-Length: 1960\n");
+					strcat(html_txt, "Content-Length: 1921\n");
 					strcat(html_txt, "Connection: close\n"); 
-					strcat(html_txt, "\n");
 					strcat(html_txt, "Content-Type: text/html; charset=UTF-8\n");
 					strcat(html_txt, "\n");
 					switch(what_methode(http_header_buffer))
@@ -349,7 +348,7 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 					int index;
 					for (index = strlen(html_txt); index < 2048; ++index)
 						*(html_txt + index) = '.';
-					*(html_txt + index) = 0;
+					*(html_txt + index) = '0';
 					if (FD_ISSET(comm_socket_fd, &writefds))
 					{
 						sent_recv_bytes = sendto(comm_socket_fd,
