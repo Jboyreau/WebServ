@@ -10,8 +10,10 @@
 #include <netdb.h>
 #include <memory.h>
 #include <errno.h>
+#include "itoa.h"
 #include "data_format.h"
 
+#define BASE_10 10
 #define SERVER_PORT 2000
 #define BUFFER_SIZE 1024
 #define MAX_CLIENT 42
@@ -28,28 +30,49 @@ char what_methode(char* http_header_buffer)
     return '\0';
 }
 
-void get_methode(char* html_txt)
+void fill_header(char *header_body, char *body_size, int body_len)
 {
-	char* msg = "GET methode.";
-	strcpy(html_txt, msg);
+	strcpy(header_body, "HTTP/1.1 200 OK\n");
+	strcat(header_body, "Server: My Personal HTTP Server\n");
+	strcat(header_body, "Content-Length: ");
+	itoa(body_len, body_size);
+	strcat(header_body, body_size);
+	strcat(header_body, "\n");
+	strcat(header_body, "Connection: close\n"); 
+	strcat(header_body, "Content-Type: text/html; charset=UTF-8\n");
+	strcat(header_body, "\n");
 }
 
-void post_methode(char* html_txt)
+void get_methode(char* header_body)
 {
-	char* msg = "POST methode.";
-	strcpy(html_txt, msg);
+	char *body = "GET methode.", body_size[14];
+
+	fill_header(header_body, body_size, strlen(body));
+	strcat(header_body, body);
 }
 
-void delete_methode(char* html_txt)
+void post_methode(char* header_body)
+{
+	char *body = "POST methode.", body_size[14];
+
+	fill_header(header_body, body_size, strlen(body));
+	strcat(header_body, body);
+}
+
+void delete_methode(char* header_body)
 {	
-	char* msg = "DELETE methode.";
-	strcpy(html_txt, msg);
+	char *body = "DELETE methode.", body_size[14];
+
+	fill_header(header_body, body_size, strlen(body));
+	strcat(header_body, body);
 }
 
-void error_methode(char* html_txt)
+void error_methode(char* header_body)
 {
-	char* msg = "ERROR methode.";
-	strcpy(html_txt, msg);
+	char *body = "ERROR methode.", body_size[14];
+
+	fill_header(header_body, body_size, strlen(body));
+	strcat(header_body, body);
 }
 
 int get_max_fd(int* fds_buffer)
@@ -100,7 +123,7 @@ void SetupCommunicationTcpServer(char* http_header_buffer, int* fds_buffer)
 	server_addr.sin_port = htons(SERVER_PORT);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 	int addr_len = sizeof(struct sockaddr);
-	char html_txt[10000];
+	char header_body[10000];
 	struct timeval timeout;
 	timeout.tv_sec = 0; // 0 secondes
 	timeout.tv_usec = 0; // 0 microsecondes	
@@ -329,35 +352,36 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 					*/
 					//Detection des methodes GET, POST, DELETE.
 					//Servir le client
-					strcpy(html_txt, "HTTP/1.1 200 OK\n");
-					strcat(html_txt, "Server: My Personal HTTP Server\n");
-					strcat(html_txt, "Content-Length: 1921\n");
-					strcat(html_txt, "Connection: close\n"); 
-					strcat(html_txt, "Content-Type: text/html; charset=UTF-8\n");
-					strcat(html_txt, "\n");
 					switch(what_methode(http_header_buffer))
 					{
 						case 'G' :
-							get_methode(html_txt + strlen(html_txt));
+							get_methode(header_body);
 							break;
 						case 'P' :
-							post_methode(html_txt + strlen(html_txt));
+							post_methode(header_body);
 							break;
 						case 'D' :
-							delete_methode(html_txt + strlen(html_txt));
+							delete_methode(header_body);
 							break;
 						default :
-							error_methode(html_txt + strlen(html_txt));
+							error_methode(header_body);
 					}
-					int index;
-					for (index = strlen(html_txt); index < 2048; ++index)
-						*(html_txt + index) = '.';
-					*(html_txt + index) = '0';
+					int h_size;
+					for (h_size = 0; *(header_body + h_size); ++h_size)
+						if (*(header_body + h_size) == '\n')
+							if (*(header_body + h_size + 1) == '\n')
+							{
+								++h_size;
+								break;
+							}
+								
+					printf("Total Size: %ld, Header Size: %d, Body Size: %ld\n", strlen(header_body), h_size, strlen(header_body + h_size + 1));
+					printf("%s\n", header_body);
 					if (FD_ISSET(comm_socket_fd, &writefds))
 					{
 						sent_recv_bytes = sendto(comm_socket_fd,
-								html_txt,
-								2048,
+								header_body,
+								strlen(header_body),
 								0,
 								(struct sockaddr*)&client_addr,
 								sizeof(struct sockaddr));
