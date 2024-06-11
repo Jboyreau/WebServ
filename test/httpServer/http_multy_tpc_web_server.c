@@ -3,77 +3,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/select.h> //type fd_set;
-#include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR; inet_ntoa();
+#include <sys/types.h> //send();
+#include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR; inet_ntoa(); send();
 #include <netinet/in.h> //IPPROTO_TCP;
 #include <arpa/inet.h>	//ntohs;
-#include <string.h> //memeset(); strcpy;
+#include <string.h> //memeset(); strcpy; strcat();
 #include <netdb.h>
 #include <memory.h>
 #include <errno.h>
-#include "itoa.h"
 #include "data_format.h"
+#include "get_post_delete.h"
 
-#define BASE_10 10
+#define HEADER_BODY_SIZE 16384
 #define SERVER_PORT 2000
-#define BUFFER_SIZE 1024
+#define REQUEST_SIZE 16384
 #define MAX_CLIENT 42
 #define MAX_REQUEST 5
-
-char what_methode(char* http_header_buffer)
-{
- 	if (strncmp(http_header_buffer, "GET ", 4) == 0)
-        return 'G';
-	else if (strncmp(http_header_buffer, "POST ", 5) == 0)
-        return 'P';
-	else if (strncmp(http_header_buffer, "DELETE ", 7) == 0)
-        return 'D';
-    return '\0';
-}
-
-void fill_header(char *header_body, char *body_size, int body_len)
-{
-	strcpy(header_body, "HTTP/1.1 200 OK\n");
-	strcat(header_body, "Server: My Personal HTTP Server\n");
-	strcat(header_body, "Content-Length: ");
-	itoa(body_len, body_size);
-	strcat(header_body, body_size);
-	strcat(header_body, "\n");
-	strcat(header_body, "Connection: close\n"); 
-	strcat(header_body, "Content-Type: text/html; charset=UTF-8\n");
-	strcat(header_body, "\n");
-}
-
-void get_methode(char* header_body)
-{
-	char *body = "GET methode.", body_size[14];
-
-	fill_header(header_body, body_size, strlen(body));
-	strcat(header_body, body);
-}
-
-void post_methode(char* header_body)
-{
-	char *body = "POST methode.", body_size[14];
-
-	fill_header(header_body, body_size, strlen(body));
-	strcat(header_body, body);
-}
-
-void delete_methode(char* header_body)
-{	
-	char *body = "DELETE methode.", body_size[14];
-
-	fill_header(header_body, body_size, strlen(body));
-	strcat(header_body, body);
-}
-
-void error_methode(char* header_body)
-{
-	char *body = "ERROR methode.", body_size[14];
-
-	fill_header(header_body, body_size, strlen(body));
-	strcat(header_body, body);
-}
 
 int get_max_fd(int* fds_buffer)
 {
@@ -84,7 +29,7 @@ int get_max_fd(int* fds_buffer)
 	return max;
 }
 
-void SetupCommunicationTcpServer(char* http_header_buffer, int* fds_buffer)
+void SetupCommunicationTcpServer(char* request, int* fds_buffer)
 {
 /*
 #######################################
@@ -123,7 +68,7 @@ void SetupCommunicationTcpServer(char* http_header_buffer, int* fds_buffer)
 	server_addr.sin_port = htons(SERVER_PORT);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 	int addr_len = sizeof(struct sockaddr);
-	char header_body[10000];
+	char header_body[HEADER_BODY_SIZE];
 	struct timeval timeout;
 	timeout.tv_sec = 0; // 0 secondes
 	timeout.tv_usec = 0; // 0 microsecondes	
@@ -307,7 +252,7 @@ Les autres requetes n+x sont ignorees.
 				{
 					comm_socket_fd = *(fds_buffer + i);
 					printf("clear buffer.\n");
-					memset(http_header_buffer, 0, BUFFER_SIZE);
+					memset(request, 0, REQUEST_SIZE);
 					/*############################################################
 					#####################8.Server recieving the data from client.#
 					##############################################################
@@ -317,8 +262,8 @@ Les autres requetes n+x sont ignorees.
 					*/
 					sent_recv_bytes = recvfrom(
 						comm_socket_fd,
-						(char*)http_header_buffer,
-						BUFFER_SIZE,
+						(char*)request,
+						REQUEST_SIZE,
 						0,
 						(struct sockaddr*)&client_addr, &addr_len);
 					printf(
@@ -326,7 +271,7 @@ Les autres requetes n+x sont ignorees.
 						sent_recv_bytes,
 						inet_ntoa(client_addr.sin_addr),
 						ntohs(client_addr.sin_port));
-printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
+					printf("-------------REQUEST CONTENT:\n%s\n", request);
 					/*
 					###########################################################
 					#####################9.Verifier la fin de la communication#
@@ -352,31 +297,34 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 					*/
 					//Detection des methodes GET, POST, DELETE.
 					//Servir le client
-					switch(what_methode(http_header_buffer))
+					switch(what_methode(request))
 					{
 						case 'G' :
-							get_methode(header_body);
+							get_methode(header_body, request, comm_socket_fd);
 							break;
 						case 'P' :
-							post_methode(header_body);
+							post_methode(header_body, request, comm_socket_fd);
 							break;
 						case 'D' :
-							delete_methode(header_body);
+							delete_methode(header_body, request, comm_socket_fd);
 							break;
 						default :
-							error_methode(header_body);
+							error_methode(header_body, request, comm_socket_fd);
 					}
-					int h_size;
-					for (h_size = 0; *(header_body + h_size); ++h_size)
-						if (*(header_body + h_size) == '\n')
-							if (*(header_body + h_size + 1) == '\n')
-							{
-								++h_size;
-								break;
-							}
-								
-					printf("Total Size: %ld, Header Size: %d, Body Size: %ld\n", strlen(header_body), h_size, strlen(header_body + h_size + 1));
-					printf("%s\n", header_body);
+					//Debug.
+					{
+						int h_size;
+						for (h_size = 0; *(header_body + h_size); ++h_size)
+							if (*(header_body + h_size) == '\n')
+								if (*(header_body + h_size + 1) == '\n')
+								{
+									++h_size;
+									break;
+								}
+						printf("Total Size: %ld, Header Size: %d, Body Size: %ld\n", strlen(header_body), h_size, strlen(header_body + h_size + 1));
+						printf("%s\n", header_body);
+					}
+					/*
 					if (FD_ISSET(comm_socket_fd, &writefds))
 					{
 						sent_recv_bytes = sendto(comm_socket_fd,
@@ -387,8 +335,18 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 								sizeof(struct sockaddr));
 						printf("##########sent_recv_bytes = %d\n", sent_recv_bytes);
 					}
-					close(comm_socket_fd);
-					*(fds_buffer + i) = -1;
+					*/
+
+					/*
+					###########################################################
+					#####################9,6.Fermeture de la communication#####
+					###########################################################
+					*/
+					{
+						close(comm_socket_fd);
+						*(fds_buffer + i) = -1;
+						printf("Communication socket closed\n");
+					}
 				}
 			}
 		}
@@ -401,8 +359,8 @@ printf("BUFFER CONTENT:\n%s\n", http_header_buffer);
 
 int main(void)
 {
-	char http_header_buffer[BUFFER_SIZE];
+	char request[REQUEST_SIZE];
 	int  fds_buffer[MAX_CLIENT];
-	SetupCommunicationTcpServer(http_header_buffer, fds_buffer);
+	SetupCommunicationTcpServer(request, fds_buffer);
 	return EXIT_SUCCESS;
 }
