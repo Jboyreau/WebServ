@@ -22,7 +22,12 @@ typedef enum {
     WAV_KEY = 39746
 } FileExtensionKey;
 
-char what_methode(char *request);
+typedef enum {
+    GET = 'G',
+	POST = 'P',
+	DELETE = 'D',
+} MethodType;
+
 void get_methode(char* header_body, char *request, int comm_socket_fd);
 void post_methode(char* header_body, char *request, int comm_socket_fd);
 void delete_methode(char* header_body, char *request, int comm_socket_fd);

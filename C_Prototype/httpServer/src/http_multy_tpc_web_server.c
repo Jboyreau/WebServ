@@ -1,5 +1,6 @@
 #include <sys/time.h> //struct timeval
 #include <unistd.h>
+#include <signal.h> //signal();
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/select.h> //type fd_set;
@@ -53,14 +54,14 @@ void SetupCommunicationTcpServer(char* request, int* fds_buffer)
 		{
 			uint32_t	s_addr;	addresse ip dans l'ordre reseau (big/little endian)
 		};
-	-sent_recv_bytes:
+	-recv_bytes:
 		...
 	-addr_len:
 		...
 	-opt:
 		Contient le numero correspondant a l'option du socket set par setsockopt.
 */
-	int master_sock_tcp_fd = 0, comm_socket_fd = 0, sent_recv_bytes = 0, opt = 1;
+	int master_sock_tcp_fd = 0, comm_socket_fd = 0, recv_bytes = 0, opt = 1;
 	fd_set readfds, writefds, exceptfds;
 	struct sockaddr_in server_addr, client_addr;
 	server_addr.sin_family = AF_INET;
@@ -251,30 +252,32 @@ Les autres requetes n+x sont ignorees.
 					comm_socket_fd = *(fds_buffer + i);
 					printf("Clear request buffer.\n");
 					memset(request, 0, REQUEST_SIZE);
-					/*############################################################
-					#####################8.Server recieving the data from client.#
-					##############################################################
-					L'IP & PORT sont stockes dans client_addr par l'os.
-					Le serveur utilisera les infos du client pour repondre.
-					ATTENTION!!! recvfrom() est bloquant.
+					/*############################################################################
+					#####################8.Recevoir le header du client (et un morceau de body)).#
+					##############################################################################
 					*/
-					sent_recv_bytes = recvfrom(
-						comm_socket_fd,
-						(char*)request,
-						REQUEST_SIZE,
-						0,
-						(struct sockaddr*)&client_addr, &addr_len
-					);
-					printf("Server recvd %d bytes from client %d\n", sent_recv_bytes, comm_socket_fd);
+					int total_recv_bytes = 0;
+					char *end_header_checker = NULL;
+					//Verifier la valeur de retour de recv pour eviter les boucles inifies.
+					recv_bytes = 1;
+					while (total_recv_bytes < REQUEST_SIZE && end_header_checker == NULL && recv_bytes)
+					{
+						recv_bytes = recv(comm_socket_fd, request + total_recv_bytes, REQUEST_SIZE - total_recv_bytes, 0);
+						printf("*DEBUG RCVBYTES = %d\n", recv_bytes);
+						end_header_checker = strstr(request, "\r\n\r\n");
+						printf("*DEBUG ENDPTR = %p\n",end_header_checker);
+						total_recv_bytes += recv_bytes;
+					}
+					printf("Server recvd %d bytes from client %d\n", recv_bytes, comm_socket_fd);
 					printf("#######################\n####REQUEST CONTENT####:\n#######################\n%s\n", request);
 					/*
-					###########################################################
-					#####################9.Verifier la fin de la communication#
-					###########################################################
+					#################################################################
+					#####################9.Verifier la fin/echec de la communication#
+					#################################################################
 					Un message vide est envoye si un onglet est ferme,
-					sent_recv_bytes == 0 -> true.
+					recv_bytes == 0 -> true.
 					*/
-					if (sent_recv_bytes == 0)
+					if (recv_bytes == 0)
 					{
 						//si le msg du client est vide, on passe au client suivant.
 						printf("-------------Communication ended by EMPTY MESSAGE with Client %d\n", comm_socket_fd);
@@ -291,15 +294,15 @@ Les autres requetes n+x sont ignorees.
 					//Servir le client
 					if (FD_ISSET(comm_socket_fd, &writefds))
 					{
-						switch(what_methode(request))
+						switch(*request)
 						{
-							case 'G' :
+							case GET :
 								get_methode(response, request, comm_socket_fd);
 								break;
-							case 'P' :
+							case POST :
 								post_methode(response, request, comm_socket_fd);
 								break;
-							case 'D' :
+							case DELETE :
 								delete_methode(response, request, comm_socket_fd);
 								break;
 							default :
@@ -331,6 +334,10 @@ int main(void)
 {
 	char request[REQUEST_SIZE];
 	int  fds_buffer[MAX_CLIENT];
+
+	//Ignorer le signal SIGPIPE.
+	//Obligatoire pour eviter les crash lorsqu'un client defunt est contacte.
+	signal(SIGPIPE, SIG_IGN);
 	SetupCommunicationTcpServer(request, fds_buffer);
 	return EXIT_SUCCESS;
 }

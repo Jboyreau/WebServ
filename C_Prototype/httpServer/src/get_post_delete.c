@@ -11,43 +11,102 @@
 #include "get_post_delete.h" //enum extension
 
 #define DEFAULT_PATH "./default/default.html"
+#define POST_PATH "./media/gif/upload.gif"
+#define MAX_FILE_SIZE 0x0FFFFFFF
 
-void feed_path(char *request, char *path)
+int get_fsize(char *request, int comm_socket_fd)
+{
+	int len;
+	char *content_length_str = strstr(request, "Content-Length: ");
+	char *error_message = "HTTP/1.1 411 Length Required\n\n";
+
+	if (!content_length_str)
+	{
+		// Error: No Content-Length found
+		send(comm_socket_fd, error_message, strlen(error_message), 0);
+		return -1;
+	}
+	content_length_str += strlen("Content-Length: ");
+	len = atoi(content_length_str);
+	if (len > MAX_FILE_SIZE)
+	{
+		//gerer cette erreur plus tard sans oublier l'overflow.
+		return -1;
+	}
+	return len;
+}
+
+static void purge_request(char **request)
+{
+    char *ptr = *request;
+
+    while (*ptr)
+    {
+        if (strncmp(ptr, "\r\n\r\n", 4) == 0)
+        {
+            *request = ptr + 4;
+            return;
+        }
+        ptr++;
+    }
+}
+
+static void feed_path(char *request, char *path)
 {
 	int i, j = 1;
 
 	*path = '.';
 	for (i = 0; *(request + i) != '\n' &&  *(request + i) != ' ' && *(request + i); ++i)
 		;
-	for (; *(request + i + j) != '\n' && *(request + i + j) && *(request + i + j) != ' '; ++j)
+	for (; *(request + i + j) != '\n' && *(request + i + j) != ' ' && *(request + i + j); ++j)
 		*(path + j) = *(request + i + j);
 	*(path + j) = 0;
 	printf("*DEBUG! EXTRACTED PATH = %s\n", path);
 }
 
-static void respond_g(char* header, char *path, int client_socket_fd, int file_size, int block_size)
+static void respond(char* header, char *path, int client_socket_fd, int file_size, int block_size)
 {
 	char *buffer;
+	int header_len = strlen(header), file_to_send_fd, total_sent_bytes, sent_bytes, bytes_chunk_size, read_bytes;
+
 	//Ouverture du fichier a envoyer:
-	int file_to_send_fd = open(path, O_RDONLY), sent_bytes, bytes_chunk_size;
-
+	file_to_send_fd = open(path, O_RDONLY);
+	if (file_to_send_fd < 0)
+	{
+		printf("Error: unable to open %s\n", path);
+		return;
+	}
 	//Envoi du header
-	sent_bytes = send(client_socket_fd, header, strlen(header), 0); //Envoie du chunk.
-
+	//Verification des valeurs de retour de send() pour eviter les infinites loop en cas de spam.
+	total_sent_bytes = 0;
+	sent_bytes = 1;
+	while (total_sent_bytes < header_len && sent_bytes > 0)
+	{
+		sent_bytes = send(client_socket_fd, header + total_sent_bytes, header_len - total_sent_bytes, 0); //Envoie du chunk.
+		total_sent_bytes += sent_bytes;
+	}
 	//Envoi du fichier
 	buffer = malloc(block_size); //Allocation du buffer de la taille d'un block/chunk.
-	while(file_size > 0)
+	if (buffer == NULL)
+	{
+		close(file_to_send_fd);
+		return ;
+	}
+	//Verification des valeurs de retour de send() et read() pour eviter les infinites loop en cas de spam.
+	sent_bytes = 1;
+	read_bytes = 1;
+	while(file_size > 0 && sent_bytes > 0 && read_bytes > 0)
 	{
 		bytes_chunk_size = ((file_size < block_size) ? file_size : block_size);
-		read(file_to_send_fd, buffer, bytes_chunk_size); //Chargement du chunk dans le buffer.
+		read_bytes = read(file_to_send_fd, buffer, bytes_chunk_size); //Chargement du chunk dans le buffer.
 		sent_bytes = send(client_socket_fd, buffer, bytes_chunk_size, 0); //Envoie du chunk.
 		file_size -= sent_bytes;
 	}
 	close(file_to_send_fd);
-	free(buffer);	
+	free(buffer);
 }
 
-static void respond(char* header_body, char* path, int comm_socket_fd)
+static void respond_temp(char* header_body, char* path, int comm_socket_fd)
 {
 	send(comm_socket_fd, header_body, strlen(header_body), 0);
 }
@@ -148,17 +207,6 @@ static void fill_header(const char* path, char* header_body, char* body_size, in
 	strcat(header_body, "\n");
 }
 
-char what_methode(char* request)
-{
- 	if (strncmp(request, "GET ", 4) == 0)
-        return 'G';
-	else if (strncmp(request, "POST ", 5) == 0)
-        return 'P';
-	else if (strncmp(request, "DELETE ", 7) == 0)
-        return 'D';
-    return '\0';
-}
-
 void get_methode(char* header, char *request, int comm_socket_fd)
 {
 	char body_size[14], path[PATH_MAX];
@@ -169,27 +217,59 @@ void get_methode(char* header, char *request, int comm_socket_fd)
 	{
 /*2.Remplir le header puis L'envoyer avec le body*/
 		fill_header(path, header, body_size, st.st_size);
-		respond_g(header, path, comm_socket_fd, st.st_size, st.st_blksize);
+		respond(header, path, comm_socket_fd, st.st_size, st.st_blksize);
 		return;
 	}
 	if (stat(DEFAULT_PATH, &st) == 0)
 	{
 /*2ALT. pareil aue l'etape 2 avec un path par default*/
 		fill_header(DEFAULT_PATH, header, body_size, st.st_size);
-		respond_g(header, DEFAULT_PATH, comm_socket_fd, st.st_size, st.st_blksize);
+		respond(header, DEFAULT_PATH, comm_socket_fd, st.st_size, st.st_blksize);
 		return;
 	}
 	send(comm_socket_fd, "", 0, 0);
 }
 
-void post_methode(char* header_body, char *request, int comm_socket_fd)
+
+void post_methode(char* response, char *request, int comm_socket_fd)
 {
-	char *body = "POST methode.", body_size[14], path[PATH_MAX];
+	int file_fd, file_size, recv_bytes, wrote_bytes;
+	char body_size[14], path[PATH_MAX], *buffer;
+	struct stat st;
 
 	feed_path(request, path);
-	fill_header(path, header_body, body_size, strlen(body));
-	strcat(header_body, body);
-	respond(header_body, path, comm_socket_fd);
+	file_size = get_fsize(request, comm_socket_fd);
+	if (file_size < 0)
+		return ;
+	purge_request(&request);
+	file_fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (file_fd < 0)
+    {
+        printf("Error : unable to open %s\n", path);
+        return;
+    }
+	//Recevoir le fichier.
+	buffer = malloc(file_size);
+	if (buffer == NULL)
+	{
+		printf("Error : unbale to allocate recv buffer\n");
+		return;
+	}
+	//Verifier les valeurs de retour de recv et write pour eviter les boucles infinies.
+	recv_bytes = 1;
+	wrote_bytes = 1;
+    while(file_size > 0 && recv_bytes > 0 && wrote_bytes > 0)
+    {
+        recv_bytes = recv(comm_socket_fd, buffer, file_size, 0); //reception du chunk.
+        wrote_bytes = write(file_fd, buffer, recv_bytes); //Ecriture du chunk dans le fichier.
+        file_size -= recv_bytes;
+    }
+    close(file_fd);
+    free(buffer);	
+	//Default response.
+	stat(POST_PATH, &st); 
+	fill_header(POST_PATH, response, body_size, st.st_size);
+	respond(response, POST_PATH, comm_socket_fd, st.st_size, st.st_blksize);
 }
 
 void delete_methode(char* header_body, char *request, int comm_socket_fd)
@@ -199,7 +279,7 @@ void delete_methode(char* header_body, char *request, int comm_socket_fd)
 	feed_path(request, path);
 	fill_header(path, header_body, body_size, strlen(body));
 	strcat(header_body, body);
-	respond(header_body, path, comm_socket_fd);
+	respond_temp(header_body, path, comm_socket_fd);
 }
 
 void error_methode(char* header_body, char *request, int comm_socket_fd)
@@ -209,5 +289,5 @@ void error_methode(char* header_body, char *request, int comm_socket_fd)
 	feed_path(request, path);
 	fill_header(path, header_body, body_size, strlen(body));
 	strcat(header_body, body);
-	respond(header_body, path, comm_socket_fd);
+	respond_temp(header_body, path, comm_socket_fd);
 }
