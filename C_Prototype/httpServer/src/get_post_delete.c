@@ -274,12 +274,21 @@ void post_methode(char* response, char *request, int comm_socket_fd)
 
 void delete_methode(char* header_body, char *request, int comm_socket_fd)
 {
-	char *body = "DELETE methode.", body_size[14], path[PATH_MAX];
+	char body_size[14], path[PATH_MAX];
+	char *success_message = "HTTP/1.1 200 OK\nContent-Length: 0\n\n";
+    char *error_message = "HTTP/1.1 404 Not Found\nContent-Length: 0\n\n";
 
 	feed_path(request, path);
-	fill_header(path, header_body, body_size, strlen(body));
-	strcat(header_body, body);
-	respond_temp(header_body, path, comm_socket_fd);
+	if (remove(path) == 0)
+	{
+		// Fichier supprimé avec succès
+        send(comm_socket_fd, success_message, strlen(success_message), 0);
+	}
+	else
+	{
+		// Échec de la suppression du fichier
+        send(comm_socket_fd, error_message, strlen(error_message), 0);
+	}
 }
 
 void error_methode(char* header_body, char *request, int comm_socket_fd)
