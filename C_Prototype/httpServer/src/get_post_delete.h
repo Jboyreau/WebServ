@@ -23,9 +23,9 @@ typedef enum {
 } FileExtensionKey;
 
 typedef enum {
-    GET = 'G',
-	POST = 'P',
-	DELETE = 'D',
+    GET = 'G' + 'E',
+	POST = 'P' + 'O',
+	DELETE = 'D' + 'E',
 } MethodType;
 
 void get_methode(char* header_body, char *request, int comm_socket_fd);

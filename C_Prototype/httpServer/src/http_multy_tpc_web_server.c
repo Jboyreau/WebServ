@@ -294,7 +294,7 @@ Les autres requetes n+x sont ignorees.
 					//Servir le client
 					if (FD_ISSET(comm_socket_fd, &writefds))
 					{
-						switch(*request)
+						switch(*request + *(request + 1))
 						{
 							case GET :
 								get_methode(response, request, comm_socket_fd);
