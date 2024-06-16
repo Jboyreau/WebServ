@@ -1,4 +1,4 @@
 all:
-	c++ *.c -o server
+	c++ server/*.cpp -o server
 clean:
 	rm server

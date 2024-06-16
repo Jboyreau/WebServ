@@ -12,6 +12,7 @@
 #include <netdb.h>
 #include <memory.h>
 #include <errno.h>
+#include <fcntl.h>
 #include "get_post_delete.h"
 
 #define RESPONSE_SIZE 16384 //taille max d'un header http.
@@ -27,6 +28,19 @@ int get_max_fd(int* fds_buffer)
 		if (max < *(fds_buffer + i))
 			max = *(fds_buffer + i);
 	return max;
+}
+
+// Fonction pour configurer un socket en mode non-bloquant
+void setNonBlocking(int socket) {
+    int flags = fcntl(socket, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl F_GETFL");
+        exit(EXIT_FAILURE);
+    }
+    if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl F_SETFL");
+		exit(EXIT_FAILURE);
+	}
 }
 
 void SetupCommunicationTcpServer(char* request, int* fds_buffer)
@@ -263,12 +277,12 @@ Les autres requetes n+x sont ignorees.
 					while (total_recv_bytes < REQUEST_SIZE && end_header_checker == NULL && recv_bytes)
 					{
 						recv_bytes = recv(comm_socket_fd, request + total_recv_bytes, REQUEST_SIZE - total_recv_bytes, 0);
-						printf("*DEBUG RCVBYTES = %d\n", recv_bytes);
+						//printf("*DEBUG RCVBYTES = %d\n", recv_bytes);
 						end_header_checker = strstr(request, "\r\n\r\n");
-						printf("*DEBUG ENDPTR = %p\n",end_header_checker);
+						//printf("*DEBUG ENDPTR = %p\n",end_header_checker);
 						total_recv_bytes += recv_bytes;
 					}
-					printf("Server recvd %d bytes from client %d\n", recv_bytes, comm_socket_fd);
+					printf("Server recvd %d bytes from client %d\n", total_recv_bytes, comm_socket_fd);
 					printf("#######################\n####REQUEST CONTENT####:\n#######################\n%s\n", request);
 					/*
 					#################################################################
@@ -292,6 +306,7 @@ Les autres requetes n+x sont ignorees.
 					*/
 					//Detection des methodes GET, POST, DELETE.
 					//Servir le client
+					//setNonBlocking(comm_socket_fd);
 					if (FD_ISSET(comm_socket_fd, &writefds))
 					{
 						switch(*request + *(request + 1))
@@ -300,7 +315,7 @@ Les autres requetes n+x sont ignorees.
 								get_methode(response, request, comm_socket_fd);
 								break;
 							case POST :
-								post_methode(response, request, comm_socket_fd);
+								post_methode(response, request, comm_socket_fd, total_recv_bytes);
 								break;
 							case DELETE :
 								delete_methode(response, request, comm_socket_fd);
@@ -316,9 +331,9 @@ Les autres requetes n+x sont ignorees.
 					###########################################################
 					*/
 					{
-						close(comm_socket_fd);
-						*(fds_buffer + i) = -1;
-						printf("Communication socket closed\n");
+						//close(comm_socket_fd);
+						//*(fds_buffer + i) = -1;
+						//printf("Communication socket closed\n");
 					}
 				}
 			}

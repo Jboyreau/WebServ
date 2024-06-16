@@ -3,11 +3,11 @@ server {
 	host 127.0.0.1;
 	server_name example.org www.example.org;
 	error_page 404 /custom_404.html;
-	client_max_body_size 1;
-	location /index.php {
-		limit_except GET;
+	client_max_body_size 84000000;
+	location /cgi/bin.php {
+		allow_methods GET;
 		return /new-path;
-		root /usr/share/nginx/html;
+		root ./;
 		autoindex on;
 		index index.html;
 		cgi_path /usr/bin/php;
@@ -15,19 +15,23 @@ server {
 }
 
 server {
-    listen 2000;
-    host 127.0.0.1;
-    server_name example.com;
+	listen 2000;
+	host 127.0.0.1;
+	server_name example.com;
 
 # Pages d'erreur par défaut
-    error_page 404 /404.html;
-    error_page 500 502 503 504 /50x.html;
+	error_page 404 /error/404.html;
+	error_page 500 /error/500.html;
+	error_page 502 /error/502.html;
+	error_page 503 /error/503.html;
+	error_page 504 /error/504.html;
 
-# Limite de taille du body
-    client_max_body_size 8;
+# Limite de taille du body en bytes.
+    client_max_body_size 84000000;
 
 # Route par défaut
     location / {
+    	allow_methods GET;
         root /var/www/html;
         index index.html index.htm;
         autoindex off;
@@ -35,26 +39,31 @@ server {
 
 # Route pour un répertoire spécifique
     location /images/ {
-        root /var/www/media;
-        autoindex on;
+    	allow_methods GET;
+		root ./;
+		autoindex on;
     }
 
 # Route avec exécution CGI
-    location /cgi-bin/ {
-        root /var/www;
+    location /cgi/ {
+		allow_methods GET POST;
+        root ./;
         cgi_pass /usr/bin/php-cgi;
         limit_except GET;
     }
 
 # Route avec téléversement de fichiers
     location /upload/ {
-        root /var/www/uploads;
+		allow_methods POST;
+		root ./;
         upload_store /var/www/uploads/store;
         limit_except POST;
     }
 
 # Redirection HTTP
     location /old-page {
-        return 301 /new-page;
+    	allow_methods GET;
+    	root ./;
+        return /new-page;
     }
 }
