@@ -264,6 +264,7 @@ Les autres requetes n+x sont ignorees.
 				else if (FD_ISSET(*(fds_buffer + i), &readfds))
 				{
 					comm_socket_fd = *(fds_buffer + i);
+					setNonBlocking(comm_socket_fd);
 					printf("Clear request buffer.\n");
 					memset(request, 0, REQUEST_SIZE);
 					/*############################################################################
@@ -272,17 +273,21 @@ Les autres requetes n+x sont ignorees.
 					*/
 					int total_recv_bytes = 0;
 					char *end_header_checker = NULL;
+					int i = 0;
 					//Verifier la valeur de retour de recv pour eviter les boucles inifies.
 					recv_bytes = 1;
-					while (total_recv_bytes < REQUEST_SIZE && end_header_checker == NULL && recv_bytes)
+					total_recv_bytes = REQUEST_SIZE;
+					while (total_recv_bytes > 0 && end_header_checker == NULL && recv_bytes && i < 100000)
 					{
-						recv_bytes = recv(comm_socket_fd, request + total_recv_bytes, REQUEST_SIZE - total_recv_bytes, 0);
-						//printf("*DEBUG RCVBYTES = %d\n", recv_bytes);
+						recv_bytes = recv(comm_socket_fd, request + REQUEST_SIZE - total_recv_bytes, total_recv_bytes, 0);
+//perror("HEADER RECV DEBUFG ");
+//printf("HEADER RECV *DEBUG RCVBYTES = %d\n", recv_bytes);
 						end_header_checker = strstr(request, "\r\n\r\n");
-						//printf("*DEBUG ENDPTR = %p\n",end_header_checker);
-						total_recv_bytes += recv_bytes;
+						total_recv_bytes -= recv_bytes * (recv_bytes > 0);
+//printf("HEADER RECV DEBUG total_recv_bytes = %d\n", total_recv_bytes);
+						++i;
 					}
-					printf("Server recvd %d bytes from client %d\n", total_recv_bytes, comm_socket_fd);
+					printf("Server recvd %d bytes from client %d\n", REQUEST_SIZE - total_recv_bytes, comm_socket_fd);
 					printf("#######################\n####REQUEST CONTENT####:\n#######################\n%s\n", request);
 					/*
 					#################################################################
@@ -306,7 +311,6 @@ Les autres requetes n+x sont ignorees.
 					*/
 					//Detection des methodes GET, POST, DELETE.
 					//Servir le client
-					//setNonBlocking(comm_socket_fd);
 					if (FD_ISSET(comm_socket_fd, &writefds))
 					{
 						switch(*request + *(request + 1))

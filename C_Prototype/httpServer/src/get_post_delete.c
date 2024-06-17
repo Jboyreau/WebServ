@@ -62,7 +62,7 @@ static void feed_path(char *request, char *path)
 	for (; *(request + i + j) != '\n' && *(request + i + j) != ' ' && *(request + i + j); ++j)
 		*(path + j) = *(request + i + j);
 	*(path + j) = 0;
-	printf("*DEBUG! EXTRACTED PATH = %s\n", path);
+printf("FIND PATH DEBUG! EXTRACTED PATH = %s\n", path);
 }
 
 static void respond(char* header, char *path, int client_socket_fd, int file_size, int block_size)
@@ -101,10 +101,20 @@ static void respond(char* header, char *path, int client_socket_fd, int file_siz
 	{
 		bytes_chunk_size = ((file_size < block_size) ? file_size : block_size);
 		read_bytes = read(file_to_send_fd, buffer, bytes_chunk_size); //Chargement du chunk dans le buffer.
-		sent_bytes = send(client_socket_fd, buffer, read_bytes, 0); //Envoie du chunk.
+		total_sent_bytes = read_bytes;
+		int i = 0;
+		while (total_sent_bytes > 0 && i < 100000)
+		{
+			sent_bytes = send(client_socket_fd, buffer, read_bytes, 0); //Envoie du chunk.
+//perror("RESPOND DEBUG ");
+//printf("RESPOND DEBUG: file_size = %d\n", file_size);
+//printf("RESPOND DEBUG sent_bytes = %d\n", sent_bytes);
+			total_sent_bytes -= sent_bytes * (sent_bytes > 0);
+			++i;
+		}
 		file_size -= read_bytes;
 	}
-printf("DEBUG: file_size = %d\n", file_size);
+printf("RESPOND DEBUG: file_size = %d\n", file_size);
 	close(file_to_send_fd);
 	free(buffer);
 }
@@ -135,7 +145,7 @@ static void fill_header(const char* path, char* header_body, char* body_size, in
 	itoa(body_len, body_size);
 	strcat(header_body, body_size);
 	strcat(header_body, "\r\n");
-	strcat(header_body, "Connection: close\r\n"); 
+	strcat(header_body, "Connection: keep-alive\r\n"); 
 	// Déterminer le type de contenu en fonction de l'extension du fichier.	
 	ext = strrchr(path, '.');
 	if (ext != NULL)
@@ -266,8 +276,8 @@ void post_methode(char* response, char *request, int comm_socket_fd, int total_r
     while(file_size > 0 && recv_bytes > 0 && wrote_bytes > 0)
     {
         recv_bytes = recv(comm_socket_fd, buffer, file_size, 0); //reception du chunk.
-        wrote_bytes = write(file_fd, buffer, recv_bytes); //Ecriture du chunk dans le fichier.
-        file_size -= recv_bytes;
+        wrote_bytes = write(file_fd, buffer, recv_bytes * (recv_bytes > 0)); //Ecriture du chunk dans le fichier.
+        file_size -= recv_bytes * (recv_bytes > 0);
     }
     close(file_fd);
     free(buffer);	
