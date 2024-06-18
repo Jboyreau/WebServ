@@ -13,7 +13,7 @@
 #define DEFAULT_PATH "./default/default.html"
 #define POST_PATH "./media/gif/upload.gif"
 #define MAX_FILE_SIZE 0x0FFFFFFF
-#define TIMEOUT 100000
+#define TIMEOUT 1000000
 
 int get_fsize(char *request, int comm_socket_fd)
 {
@@ -106,6 +106,7 @@ printf("RESPOND DEBUG: file_size = %d\n", file_size);
 		total_sent_bytes += read_bytes * (read_bytes > 0);
 		++i;
 	}
+printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
 	i = 0;
 	sent_bytes = 0;
 	total_sent_bytes = 0;
