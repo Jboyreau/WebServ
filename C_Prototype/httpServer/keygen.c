@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #define EXT_NUM 19
-
+//
 int keygen(char *ext)
 {
 	int sum = 0;

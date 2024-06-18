@@ -307,7 +307,7 @@ Les autres requetes n+x sont ignorees.
 					Un message vide est envoye si un onglet est ferme,
 					recv_bytes == 0 -> true.
 					*/
-					if (total_recv_bytes == 0)
+					if (total_recv_bytes == 0 || recv_bytes < 0)
 					{
 						//si le msg du client est vide, on passe au client suivant.
 						printf("-------------Communication ended by EMPTY MESSAGE with Client %d\n", comm_socket_fd);
@@ -346,9 +346,9 @@ Les autres requetes n+x sont ignorees.
 					###########################################################
 					*/
 					{
-						//close(comm_socket_fd);
-						//*(fds_buffer + i) = -1;
-						//printf("Communication socket closed\n");
+						close(comm_socket_fd);
+						*(fds_buffer + i) = -1;
+						printf("Communication socket closed\n");
 					}
 				}
 			}
