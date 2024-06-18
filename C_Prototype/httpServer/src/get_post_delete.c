@@ -106,9 +106,9 @@ static void respond(char* header, char *path, int client_socket_fd, int file_siz
 		while (total_sent_bytes > 0 && i < 100000)
 		{
 			sent_bytes = send(client_socket_fd, buffer, read_bytes, 0); //Envoie du chunk.
-//perror("RESPOND DEBUG ");
-//printf("RESPOND DEBUG: file_size = %d\n", file_size);
-//printf("RESPOND DEBUG sent_bytes = %d\n", sent_bytes);
+perror("RESPOND DEBUG ");
+printf("RESPOND DEBUG: file_size = %d\n", file_size);
+printf("RESPOND DEBUG sent_bytes = %d\n", sent_bytes);
 			total_sent_bytes -= sent_bytes * (sent_bytes > 0);
 			++i;
 		}
@@ -145,7 +145,7 @@ static void fill_header(const char* path, char* header_body, char* body_size, in
 	itoa(body_len, body_size);
 	strcat(header_body, body_size);
 	strcat(header_body, "\r\n");
-	strcat(header_body, "Connection: keep-alive\r\n"); 
+	strcat(header_body, "Connection: close\r\n"); 
 	// Déterminer le type de contenu en fonction de l'extension du fichier.	
 	ext = strrchr(path, '.');
 	if (ext != NULL)
@@ -250,7 +250,9 @@ void post_methode(char* response, char *request, int comm_socket_fd, int total_r
 	char body_size[14], path[PATH_MAX], *buffer;
 	struct stat st;
 
+	//Trouver le chemin du fichier.
 	feed_path(request, path);
+	//Trouver la taille du fichier.
 	file_size = get_fsize(request, comm_socket_fd);
 	if (file_size < 0)
 		return ;
@@ -268,23 +270,30 @@ void post_methode(char* response, char *request, int comm_socket_fd, int total_r
 		printf("Error : unbale to allocate recv buffer\n");
 		return;
 	}
+printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
+	//Ecrire le morceau de body en trop.
+	if (body_chunk_size > 0)
+	{
+		recv_bytes = write(file_fd, request, body_chunk_size);
+		file_size -= recv_bytes;
+	}
 	//Verifier les valeurs de retour de recv et write pour eviter les boucles infinies.
-	recv_bytes = write(file_fd, request, body_chunk_size);
-	recv_bytes += 1 * (recv_bytes == 0); //initialisation de recv_bytes a 1 si rien na ete lu.
-	file_size -= recv_bytes;
+	recv_bytes = 1;
 	wrote_bytes = 1;
+	printf("POST DEBUG Before file_size = %d\n", file_size);
     while(file_size > 0 && recv_bytes > 0 && wrote_bytes > 0)
     {
         recv_bytes = recv(comm_socket_fd, buffer, file_size, 0); //reception du chunk.
         wrote_bytes = write(file_fd, buffer, recv_bytes * (recv_bytes > 0)); //Ecriture du chunk dans le fichier.
         file_size -= recv_bytes * (recv_bytes > 0);
     }
+	printf("POST DEBUG file_size = %d\n", file_size);
     close(file_fd);
     free(buffer);	
 	//Default response.
-	stat(POST_PATH, &st); 
-	fill_header(POST_PATH, response, body_size, st.st_size);
-	respond(response, POST_PATH, comm_socket_fd, st.st_size, st.st_blksize);
+	//stat(POST_PATH, &st); 
+	//fill_header(POST_PATH, response, body_size, st.st_size);
+	//respond(response, POST_PATH, comm_socket_fd, st.st_size, st.st_blksize);
 }
 
 void delete_methode(char* header_body, char *request, int comm_socket_fd)

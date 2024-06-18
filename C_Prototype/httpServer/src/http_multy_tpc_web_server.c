@@ -19,7 +19,7 @@
 #define SERVER_PORT 2000
 #define REQUEST_SIZE 16384
 #define MAX_CLIENT 42
-#define MAX_REQUEST 5
+#define MAX_REQUEST 1
 
 int get_max_fd(int* fds_buffer)
 {
@@ -184,10 +184,12 @@ Les autres requetes n+x sont ignorees.
 		#####################5.Initialiser et remplir readfds#
 		######################################################
 		On copy fds_buffer dans readfds apres l'avoir reinitialise*/
+//puts("0");
 		{
 			FD_ZERO(&readfds); //vide readfds
 			FD_ZERO(&writefds); //vide writefds
 			FD_ZERO(&exceptfds); //vide exceptfds
+//puts("1");
 			for (int i = 0; i < MAX_CLIENT; ++i)
 				if (*(fds_buffer + i) != -1)
 				{
@@ -195,10 +197,12 @@ Les autres requetes n+x sont ignorees.
 					FD_SET(*(fds_buffer + i), &writefds);
 					FD_SET(*(fds_buffer + i), &exceptfds);
 				}
+//puts("2");
 		}
 		/*#####################################################
 		#####################6.Attendre la connexion du client#
 		#######################################################*/
+//puts("3");
 		select(get_max_fd(fds_buffer) + 1, &readfds, &writefds, &exceptfds, &timeout);
 		/*
 			ATTENTION: select() est bloquant!!!
@@ -217,8 +221,10 @@ Les autres requetes n+x sont ignorees.
 			le master_sock_tcp_fd s'active.
 			FD_ISSET(master_sock_tcp_fd, readfds) verifie cela.
 		*/
+//puts("4");
 		if (FD_ISSET(master_sock_tcp_fd, &readfds))
 		{
+//puts("5");
 			/*#######################################################
 			#####################7.Accepter la demande de connection#
 			#########################################################
@@ -234,6 +240,7 @@ Les autres requetes n+x sont ignorees.
 				inet_ntoa(client_addr.sin_addr),
 				ntohs(client_addr.sin_port)
 			);
+//puts("6");
 			/*MULTIPLEXING!!!!
 			############################################################
 			#####################7,5.Ajouter client fd dans fds_buffer.#
@@ -247,6 +254,8 @@ Les autres requetes n+x sont ignorees.
 						break;
 					}
 			}
+
+//puts("7");
 		}
 		else
 		{
@@ -255,6 +264,7 @@ Les autres requetes n+x sont ignorees.
 			*/
 			for (int i = 1; i < MAX_CLIENT; ++i)
 			{
+//puts("8");
 				if (FD_ISSET(*(fds_buffer + i), &exceptfds))
 				{
 					printf("Exception on client %d\n", *(fds_buffer + i));
@@ -273,7 +283,7 @@ Les autres requetes n+x sont ignorees.
 					*/
 					int total_recv_bytes = 0;
 					char *end_header_checker = NULL;
-					int i = 0;
+					int j = 0;
 					//Verifier la valeur de retour de recv pour eviter les boucles inifies.
 					recv_bytes = 1;
 					total_recv_bytes = REQUEST_SIZE;
@@ -285,9 +295,10 @@ Les autres requetes n+x sont ignorees.
 						end_header_checker = strstr(request, "\r\n\r\n");
 						total_recv_bytes -= recv_bytes * (recv_bytes > 0);
 //printf("HEADER RECV DEBUG total_recv_bytes = %d\n", total_recv_bytes);
-						++i;
+						++j;
 					}
-					printf("Server recvd %d bytes from client %d\n", REQUEST_SIZE - total_recv_bytes, comm_socket_fd);
+					total_recv_bytes = REQUEST_SIZE -total_recv_bytes;
+					printf("Server recvd %d bytes from client %d\n", total_recv_bytes, comm_socket_fd);
 					printf("#######################\n####REQUEST CONTENT####:\n#######################\n%s\n", request);
 					/*
 					#################################################################
@@ -296,7 +307,7 @@ Les autres requetes n+x sont ignorees.
 					Un message vide est envoye si un onglet est ferme,
 					recv_bytes == 0 -> true.
 					*/
-					if (recv_bytes == 0)
+					if (total_recv_bytes == 0)
 					{
 						//si le msg du client est vide, on passe au client suivant.
 						printf("-------------Communication ended by EMPTY MESSAGE with Client %d\n", comm_socket_fd);
