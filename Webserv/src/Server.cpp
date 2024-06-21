@@ -19,9 +19,17 @@ Server(void)
 		if (virtual_servers[i])
 			delete virtual_servers[i];
 }
-bool Server::parsing(char *cnf_path)
+bool Server::parsing(void)
 {
-	;	
+	char *file_content;
+
+	loadFileToBuffer(CNF_PATH);
+}
+
+void Server::run(void)
+{
+	setup();
+	communicate();
 }
 
 Server::setup(void)
@@ -59,11 +67,6 @@ Server::setup(void)
 	}
 }
 
-void Server::accept_serve(int *fd_buffer, t_config cnf)
-{
-	;
-}
-
 void Server::communicate(void)
 {
 	int *virtual_server, i, j;
@@ -96,8 +99,7 @@ void Server::communicate(void)
 	}
 }
 
-void Server::run(void)
+void Server::acceptServe(int *fd_buffer, t_config cnf)
 {
-	setup();
-	communicate();
+	;
 }

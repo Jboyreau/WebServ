@@ -63,6 +63,10 @@ class Server
 	public:
 		Server(int opt);
 		~Server(void);
-		void run(void);	
+		bool parsing(void);
+		void run(void);
+		void setup(void);
+		void communicate(void);
+		void acceptServe(int *fd_buffer, t_config cnf);
 };
 #endif
