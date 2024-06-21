@@ -3,41 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Default Page</title>
+    <title>Media Files</title>
     <style>
         body {
             background-color: #f0f0f0;
             font-family: 'Arial', sans-serif;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            height: 100vh;
             margin: 0;
+            padding: 20px;
         }
         .container {
-            text-align: center;
             background-color: #ffffff;
-            padding: 50px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            margin-bottom: 20px;
         }
         h1 {
             color: #333333;
-            font-size: 48px;
-            margin: 0;
+            font-size: 32px;
+            margin: 0 0 20px 0;
         }
-        p {
-            color: #666666;
-            font-size: 18px;
-            margin-top: 10px;
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin: 5px 0;
+            padding-left: 20px;
+            text-indent: -20px;
+        }
+        li::before {
+            content: "├── ";
+        }
+        li:last-child::before {
+            content: "└── ";
+        }
+        li ul li::before {
+            content: "│   ├── ";
+        }
+        li ul li:last-child::before {
+            content: "│   └── ";
+        }
+        li ul li ul li::before {
+            content: "    ├── ";
+        }
+        li ul li ul li:last-child::before {
+            content: "    └── ";
+        }
+        a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        input[type="submit"] {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #005bb5;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Default Page</h1>
-        <p>Welcome to the default page!</p>
+        <h1>Media Files</h1>
+        <ul>
+            <li>media/
+                <ul>
+                    <li>gif/
+                        <ul>
+                            <li><a href="/media/gif/download.gif">download.gif</a></li>
+                            <li><a href="/media/gif/error_upload.gif">error_upload.gif</a></li>
+                            <li><a href="/media/gif/morning.gif">morning.gif</a></li>
+                            <li><a href="/media/gif/upload.gif">upload.gif</a></li>
+                        </ul>
+                    </li>
+                    <li>img/
+                        <ul>
+                            <li><a href="/media/img/byker_sunset.jpg">byker_sunset.jpg</a></li>
+                            <li><a href="/media/img/midnight_vector.jpg">midnight_vector.jpg</a></li>
+                            <li><a href="/media/img/vector.jpg">vector.jpg</a></li>
+                        </ul>
+                    </li>
+                    <li>pdf/
+                        <ul>
+                            <li><a href="/media/pdf/fr.subject.pdf">fr.subject.pdf</a></li>
+                        </ul>
+                    </li>
+                    <li>vid/
+                        <ul>
+                            <li><a href="/media/vid/sample_fat_rabbit.mp4">sample_fat_rabbit.mp4</a></li>
+                            <li><a href="/media/vid/test.mp4">test.mp4</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+        </ul>
     </div>
+    <div class="container">
+        <h1>Upload a File</h1>
+        <form id="uploadForm">
+            <input type="file" id="fileInput" name="file">
+            <input type="submit" value="Upload">
+        </form>
+    </div>
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            var fileInput = document.getElementById('fileInput');
+            var file = fileInput.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var arrayBuffer = e.target.result;
+                    fetch('/upload/' + file.name, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': file.type,
+                            'Content-Length': file.size
+                        },
+                        body: arrayBuffer
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            alert('File uploaded successfully!');
+                        } else {
+                            alert('Failed to upload file.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while uploading the file.');
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+    </script>
 </body>
 </html>
 

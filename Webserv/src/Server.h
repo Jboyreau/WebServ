@@ -27,10 +27,13 @@
 #include <stdint.h> //unint32_t
 
 #define TIMEOUT 1000000
+#define SELECT_TIMEOUT_SEC 0
+#define SELECT_TIMEOUT_USEC 0
 #define HTTP_HEADER_SIZE 16384
 #define MAX_VSERVER 5
 #define MAX_CLIENT 10
-#define REQUEST_QUEUE_LEN 50
+#define REQUEST_QUEUE_LEN 100
+#define MAX_BODY_SIZE 500000000 //byte
 #define CNF_PATH "./config/config.txt"
 #define RED "\033[1;31m"
 #define YELLOW "\033[1;33m"
@@ -48,12 +51,13 @@ class Server
 		t_config cnf[MAX_VSERVER];
 		char response[HTTP_HEADER_SIZE];
 		char request[HTTP_HEADER_SIZE];
-		int *virtual_servers[MAX_VSERVER + 1];
+		int *virtual_servers[MAX_VSERVER];
 		struct sockaddr_in client_addr;
 		struct timeval timeout;
 		fd_set readfds;
 		fd_set writefds;
 		fd_set exceptfds;
+		char *body;
 		int opt;
 		int cnf_len;
 	public:

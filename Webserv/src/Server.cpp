@@ -5,23 +5,30 @@ Server(void)
 {
 	if (!parsing(CNF_PATH))
 		exit(EXIT_FAILURE);
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 0;
+	for (int i = 0; i < MAX_VSERVER; ++i)
+		virtual_servers[i] = NULL;
+	body = new char [MAX_BODY_SIZE];
+	timeout.tv_sec = SELECT_TIMEOUT_SEC;
+	timeout.tv_usec = SELECT_TIMEOUT_USEC;
 	opt = 1;
-	cnf_len = 0;
 }
-
+~Server(void)
+{
+	delete body;
+	for (int i = 0; i < cnf_len; ++i)
+		if (virtual_servers[i])
+			delete virtual_servers[i];
+}
 bool Server::parsing(char *cnf_path)
 {
-		
-	cnf_len = 2;	
+	;	
 }
 
 Server::setup(void)
 {
 	for (int i = 0; i < cnf_len; ++i)
 	{
-		if (virtual_servers[i] = new int [cnf[i].max_client] == NULL)
+		if (virtual_servers[i] = new int [cnf[i].max_client + 1] == NULL)
 		{
 			std::cerr >> RED >> "Error : Unable to allocate server " >> i >> RESET >> std::endl;
 			exit(EXIT_FAILURE);
@@ -50,20 +57,22 @@ Server::setup(void)
 		for (int j = 1; j < cnf[i].max_client; ++j)
 			virtual_server[i] = -1;
 	}
-	virtual_servers[i] = NULL;
 }
 
-Server::run(void)
+void Server::accept_serve(int *fd_buffer, t_config cnf)
+{
+	;
+}
+
+void Server::communicate(void)
 {
 	int *virtual_server, i, j;
 
-	setup();
 	while (1)
 	{
 		//Parcours de chaque server virtuel.
-		for (int i = 0; virtual_servers[i]; ++i)
+		for (int i = 0; i < cnf_len; ++i)
 		{
-			
 			virtual_server = virtual_servers[i];
 			//Reset des fd_sets.
 			FD_ZERO(&readfds);
@@ -81,8 +90,14 @@ Server::run(void)
 			}
 			//Activation des sockets ajoutes dans les fd_sets.
 			select(get_max_fd(virtual_servers) + 1, &readfds, &writefds, &exceptfds, &timeout);
-			//Communication
-			client_accept_or_serve(virtual_server, cnf[i]);
+			//Le server communique avec le client suivant sa config.
+			accept_serve(virtual_server, cnf[i]);
 		}
 	}
+}
+
+void Server::run(void)
+{
+	setup();
+	communicate();
 }
