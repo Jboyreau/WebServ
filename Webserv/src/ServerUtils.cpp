@@ -44,3 +44,99 @@ uint32_t ftInetAddr(const char *ip_address)
 	}
 	return htonl(result);
 }
+
+t_token findType(char *buffer, int *index)
+{
+	t_token token;
+	int len = 0;
+
+	while (*(buffer + len) && *(buffer + len) != ' ' && *(buffer + len) != '\n' && *(buffer + len) != '\t')
+		++len;
+	(*index) += len;
+	token.str = buffer;
+	token.len = len;
+	if (strncmp(buffer, "server", len) == 0)
+	{
+		token.type = SERVER;
+	}
+	else if (strncmp(buffer, "listen", len) == 0)
+	{
+		token.type = PORT;
+	}
+	else if (strncmp(buffer, "host", len) == 0)
+	{
+		token.type = IP;
+	}
+	else if (strncmp(buffer, "server_name", len) == 0)
+	{
+		token.type = NAME;
+	}
+	else if (strncmp(buffer, "error_page", len) == 0)
+	{
+		token.type = ERR;
+	}
+	else if (strncmp(buffer, "client_max_body_size", len) == 0)
+	{
+		token.type = SIZE;
+	}
+	else if (strncmp(buffer, "location", len) == 0)
+	{
+		token.type = LOC;
+	}
+	else if (strncmp(buffer, "allow_methods", len) == 0)
+	{
+		token.type = METH;
+	}
+	else if (strncmp(buffer, "root", len) == 0)
+	{
+		token.type = ROOT;
+	}
+	else if (strncmp(buffer, "autoindex", len) == 0)
+	{
+		token.type = AUTOINDEX;
+	}
+	else if (strncmp(buffer, "index", len) == 0)
+	{
+		token.type = INDEX;
+	}
+	else if (strncmp(buffer, "cgi_path", len) == 0)
+	{
+		token.type = CGIPATH;
+	}
+	else if (strncmp(buffer, "return", len) == 0)
+	{
+		token.type = RETURN;
+	}
+	else
+		token.type = WORD;
+	return token;
+}
+
+std::vector<t_token> tokenizer(char *buffer)
+{
+	int i = 0;
+
+	std::vector<t_token> token_liste;
+	t_token token;
+
+	while (*(buffer + i))
+	{
+		if (*(buffer + i) == ' ' || *(buffer + i) == '\n' || *(buffer + i) == '\t')
+		{
+			if (*(buffer + i) == '\n')
+			{
+				token.str = NL;
+				token.len = 1;
+				token.type = END;
+				token_liste.push_back(token);
+			}
+			++i;
+		}
+		else if (*(buffer + i))
+		{
+			token = findType(buffer + i, &i);
+			token_liste.push_back(token);
+		}
+	}
+	return token_liste;
+}

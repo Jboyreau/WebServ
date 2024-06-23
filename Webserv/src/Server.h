@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include <map>
 #include <algorithm>
 
 #include <unistd.h> //read(); write();
@@ -34,18 +35,30 @@
 #define MAX_CLIENT 10
 #define REQUEST_QUEUE_LEN 100
 #define MAX_BODY_SIZE 500000000 //byte
+#define MAX_SERVER_NAME_LEN 253
 #define CNF_PATH "./config/config.txt"
 #define RED "\033[1;31m" //Error
 #define YELLOW "\033[1;33m" //Debug
 #define GREEN "\033[1;32m" //Info
 #define RESET "\033[0m"
 
+typedef struct s_location
+{
+	std::map<char*, bool> method_map;
+	char root[PATH_MAX];
+	bool autoindex;
+	char index[PATH_MAX];
+	char cgi_path[PATH_MAX];
+	char ret[PATH_MAX];
+} t_location;
 
 typedef struct s_config
 {
 	struct sockaddr_in server_addr;
-	int max_client;
-	
+	char name[MAX_SERVER_NAME_LEN];
+	std::map<char*, char*> error_map;
+	size_t max_body_size;
+	std::map<char*, t_location> location_map;	
 } t_config;
 
 class Server

@@ -1,62 +1,37 @@
 server
-	listen 2000
-	host 127.0.0.1
-	server_name example.com
-	error_page 403 /error/403.html
-	error_page 404 /error/404.html
-	error_page 500 /error/500.html
-	error_page 502 /error/502.html
-	error_page 503 /error/503.html
-	error_page 504 /error/504.html
-	client_max_body_size 84000000
-	location /
-		allow_methods GET
-		root ./
-		autoindex on
-		index ./default/default.html
-	location /media/
-		allow_methods GET
-		root ./media/
-		autoindex on
-	location /cgi/
-		allow_methods GET POST
-		root ./cgi/
-		cgi_path ./cgi/php-cgi
-	location /upload/
-		allow_methods POST
-		root ./upload/
-	location /old-page/
-		allow_methods GET
-		root ./old-page/
-		return ./new-page/
-
-server
 	listen 2042
 	host 127.42.42.42
 	server_name example.com
+	# Pages d'erreur par défaut.
 	error_page 403 /error/403.html
 	error_page 404 /error/404.html
 	error_page 500 /error/500.html
 	error_page 502 /error/502.html
 	error_page 503 /error/503.html
 	error_page 504 /error/504.html
+	# Limite de taille du body en bytes.
 	client_max_body_size 84000000
+	# Route par défaut
 	location /
 		allow_methods GET
 		root ./
 		autoindex on
 		index ./default/default.html
+	# Route pour un répertoire spécifique
 	location /media/
 		allow_methods GET
 		root ./media/
 		autoindex on
+	# Route avec exécution CGI
 	location /cgi/
 		allow_methods GET POST
 		root ./cgi/
 		cgi_path ./cgi/php-cgi
+	# Route avec téléversement de fichiers
 	location /upload/
 		allow_methods POST
 		root ./upload/
+	# Redirection HTTP
 	location /old-page/
 		allow_methods GET
 		root ./old-page/

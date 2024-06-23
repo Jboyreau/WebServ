@@ -25,9 +25,16 @@ Server::~Server(void)
 bool Server::parsing(void)
 {
 	char *file_content;
+	std::vector<t_token> token_liste;
 
 	file_content = loadFileToBuffer(CNF_PATH);
-std::cerr << YELLOW << file_content << RESET << std::endl;
+	token_liste = tokenizer(file_content);
+	for (std::vector<t_token>::iterator it = token_liste.begin(); it != token_liste.end(); ++it)
+	{
+        std::cout << YELLOW << (*it).type << " : ";
+		std::cout.write((*it).str, (*it).len);
+		std::cout << RESET << std::endl;
+	}
 	delete[] file_content;
 	return true;
 }
@@ -44,7 +51,7 @@ void Server::setup(void)
 
 	for (int i = 0; i < cnf_len; ++i)
 	{
-		if ((virtual_servers[i] = new int [cnf[i].max_client + 1]) == NULL)
+		if ((virtual_servers[i] = new int [MAX_CLIENT + 1]) == NULL)
 		{
 			std::cerr << RED << "Error : Unable to allocate server " << i << RESET << std::endl;
 			exit(EXIT_FAILURE);
@@ -70,7 +77,7 @@ void Server::setup(void)
 			std::cerr << RED << "Error : Listen failed for server " << i << RESET << std::endl;
 			exit(EXIT_FAILURE);
 		}
-		for (int j = 1; j < cnf[i].max_client; ++j)
+		for (int j = 1; j < MAX_CLIENT; ++j)
 			virtual_server[i] = -1;
 	}
 }
@@ -92,7 +99,7 @@ void Server::communicate(void)
 			FD_ZERO(&writefds);
 			FD_ZERO(&exceptfds);
 			//Ajout des fd different de -1 dans les fd_sets.
-			for (int j = 0; j < cnf[i].max_client; ++j)
+			for (int j = 0; j < MAX_CLIENT; ++j)
 			{
 				if (virtual_server[j] != -1)
 				{
