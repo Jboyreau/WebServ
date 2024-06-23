@@ -35,14 +35,17 @@
 #define REQUEST_QUEUE_LEN 100
 #define MAX_BODY_SIZE 500000000 //byte
 #define CNF_PATH "./config/config.txt"
-#define RED "\033[1;31m"
-#define YELLOW "\033[1;33m"
-#define GREEN "\033[1;32m" 
+#define RED "\033[1;31m" //Error
+#define YELLOW "\033[1;33m" //Debug
+#define GREEN "\033[1;32m" //Info
 #define RESET "\033[0m"
+
 
 typedef struct s_config
 {
-	struct sockaddr_in server_addr;	
+	struct sockaddr_in server_addr;
+	int max_client;
+	
 } t_config;
 
 class Server
@@ -61,12 +64,14 @@ class Server
 		int opt;
 		int cnf_len;
 	public:
-		Server(int opt);
+		Server(void);
 		~Server(void);
 		bool parsing(void);
 		void run(void);
 		void setup(void);
 		void communicate(void);
 		void acceptServe(int *fd_buffer, t_config cnf);
+		int getMaxFd(int* fds_buffer);
+		void setNonBlocking(int socket);
 };
 #endif

@@ -1,8 +1,8 @@
 #include "ServerUtils.h"
 
-
 char* loadFileToBuffer(const char* filename)
 {
+	
 	char *buffer;
 	std::ifstream file(filename, std::ios::binary | std::ios::ate); //Ouvrir en mode binaire et placer le curseur à la fin
 	if (!file)
@@ -23,7 +23,7 @@ char* loadFileToBuffer(const char* filename)
 	exit(EXIT_FAILURE);
 }
 
-uint32_t ft_inet_addr(const char *ip_address)
+uint32_t ftInetAddr(const char *ip_address)
 {
 	unsigned long int result = 0;
 	int byte, i;

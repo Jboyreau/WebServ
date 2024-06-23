@@ -31,13 +31,17 @@ int get_max_fd(int* fds_buffer)
 }
 
 // Fonction pour configurer un socket en mode non-bloquant
-void setNonBlocking(int socket) {
+void setNonBlocking(int socket)
+{
     int flags = fcntl(socket, F_GETFL, 0);
-    if (flags == -1) {
+    
+    if (flags == -1)
+    {
         perror("fcntl F_GETFL");
         exit(EXIT_FAILURE);
     }
-    if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+    if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1)
+    {
         perror("fcntl F_SETFL");
 		exit(EXIT_FAILURE);
 	}
