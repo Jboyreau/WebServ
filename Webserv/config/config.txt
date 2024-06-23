@@ -30,13 +30,14 @@ server
 	location /old-page/
 		allow_methods GET
 		root ./old-page/
-		return /new-page
+		return ./new-page
 
 server
 	listen 2042
 	host 127.42.42.42
 	server_name example.com
 	# Pages d'erreur par défaut.
+	error_page 403 /error/403.html
 	error_page 404 /error/404.html
 	error_page 500 /error/500.html
 	error_page 502 /error/502.html
@@ -70,4 +71,4 @@ server
 	location /old-page/
 		allow_methods GET
 		root ./old-page/
-		return /new-page
+		return ./new-page
