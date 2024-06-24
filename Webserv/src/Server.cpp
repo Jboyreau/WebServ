@@ -24,19 +24,61 @@ Server::~Server(void)
 
 bool Server::parsing(void)
 {
+	int line = 1;
+	bool parsing_result = false;
 	char *file_content;
 	std::vector<t_token> token_liste;
+	std::vector<t_token>::iterator it;
 
 	file_content = loadFileToBuffer(CNF_PATH);
 	token_liste = tokenizer(file_content);
-	for (std::vector<t_token>::iterator it = token_liste.begin(); it != token_liste.end(); ++it)
 	{
-        std::cout << YELLOW << (*it).type << " : ";
-		std::cout.write((*it).str, (*it).len);
-		std::cout << RESET << std::endl;
+		for (it = token_liste.begin(); it != token_liste.end(); ++it)
+		{
+			std::cout << YELLOW << (*it).type << " : ";
+			std::cout.write((*it).str, (*it).len);
+			std::cout << RESET << std::endl;
+		}
 	}
+	it = token_liste.begin();
+	while ((*it).type == SERVER)
+		parsing_result = ruleServer(token_liste, it, &line);
 	delete[] file_content;
-	return true;
+	return parsing_result;
+}
+
+bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	if ((std::distance(it, token_liste.end()) > 2))
+	{
+		if ((*it).type == SERVER && (*(it + 1)).type == END)
+		{
+			it += 2;
+			if (rulePort(token_liste, it, &line) == false)
+				return false;
+			if (ruleIP(token_liste, it, &line) == false)
+				return false;
+			if (ruleName(token_liste, it, &line) == false)
+				return false;
+			if (ruleError(token_liste, it, &line))
+				return false;
+			if (ruleLocation(token_liste, it, &line) == false)
+				return false;
+			if (it == token_liste.end(token_liste, it, &line))
+				return true;
+			if ((*it).type == SERVER)
+				return true;
+			return false;
+		}
+	}
+	else
+	{
+		std::cerr >> RED >> "Error : config.txt, line " >> line >> "near ";
+		std::cerr.write((*it).str, (*it).len);
+		std::cerr >> RESET >> std::endl;
+		return false;
+	}
+			
 }
 
 void Server::run(void)

@@ -50,7 +50,7 @@ t_token findType(char *buffer, int *index)
 	t_token token;
 	int len = 0;
 
-	while (*(buffer + len) && *(buffer + len) != ' ' && *(buffer + len) != '\n' && *(buffer + len) != '\t')
+	while (*(buffer + len) && *(buffer + len) != '\n' && std::isspace(static_cast<unsigned char>(*(buffer + len)))
 		++len;
 	(*index) += len;
 	token.str = buffer;
@@ -121,7 +121,7 @@ std::vector<t_token> tokenizer(char *buffer)
 
 	while (*(buffer + i))
 	{
-		if (*(buffer + i) == ' ' || *(buffer + i) == '\n' || *(buffer + i) == '\t')
+		if (*(buffer + i) == '\n' || std::isspace(static_cast<unsigned char>(*(buffer + i)))
 		{
 			if (*(buffer + i) == '\n')
 			{

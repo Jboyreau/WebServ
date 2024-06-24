@@ -80,6 +80,7 @@ class Server
 		Server(void);
 		~Server(void);
 		bool parsing(void);
+		bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it)
 		void run(void);
 		void setup(void);
 		void communicate(void);

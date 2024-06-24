@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <cctype> //ispace
 #include <cstring> // pour strncmp
 #include <ctype.h> //isdigit
 #include <stdlib.h>
