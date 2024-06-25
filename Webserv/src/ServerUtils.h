@@ -47,5 +47,6 @@ uint32_t ftInetAddr(const std::vector<t_token>::iterator &it);
 char* loadFileToBuffer(const char* filename);
 std::vector<t_token> tokenizer(char *buffer);
 bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port);
+bool configErr(const std::vector<t_token>::iterator &it, int linT);
 
 #endif

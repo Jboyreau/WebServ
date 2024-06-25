@@ -88,6 +88,7 @@ class Server
 		bool ruleName(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		void run(void);
 		void setup(void);

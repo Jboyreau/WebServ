@@ -29,7 +29,6 @@ server
 		allow_methods GET
 		root ./old-page/
 		return ./new-page/
-
 server
 	listen 2042
 	host 127.42.42.42

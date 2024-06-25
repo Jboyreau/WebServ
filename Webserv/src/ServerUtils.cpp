@@ -51,7 +51,7 @@ t_token findType(char *buffer, int *index)
 	t_token token;
 	int len = 0;
 
-	while (*(buffer + len) && *(buffer + len) != '\n' && std::isspace(static_cast<unsigned char>(*(buffer + len))))
+	while (*(buffer + len) && *(buffer + len) != '\n' && !std::isspace(static_cast<unsigned char>(*(buffer + len))))
 		++len;
 	(*index) += len;
 	token.str = buffer;
@@ -154,4 +154,13 @@ bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port)
 		return false;
 	port = htons(port);
 	return true;
+}
+
+
+bool configErr(const std::vector<t_token>::iterator &it, int line)
+{
+	std::cerr << RED << "Error Config : line " << line << " near ";
+	std::cerr.write((*it).str, (*it).len);
+	std::cerr << RESET << std::endl;
+	return false;
 }
