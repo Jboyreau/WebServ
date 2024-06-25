@@ -43,8 +43,9 @@ typedef struct s_token
 	int	type;
 }t_token;
 
-uint32_t ftInetAddr(const char *ip_address);
+uint32_t ftInetAddr(const std::vector<t_token>::iterator &it);
 char* loadFileToBuffer(const char* filename);
 std::vector<t_token> tokenizer(char *buffer);
+bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port);
 
 #endif

@@ -1,5 +1,4 @@
 #include "Server.h"
-#include "ServerUtils.h"
 
 Server::Server(void)
 {
@@ -40,46 +39,243 @@ bool Server::parsing(void)
 			std::cout << RESET << std::endl;
 		}
 	}
+//Appel de ruleServer() pour traiter plusieurs blocs.
 	it = token_liste.begin();
-	while ((*it).type == SERVER)
-		parsing_result = ruleServer(token_liste, it, &line);
+	server_index = 0;
+	while (server_index < MAX_VSERVER)
+	{
+		if (it != token_liste.end())
+		{
+			if ((*it).type == SERVER)
+			{
+				parsing_result = ruleServer(token_liste, it, line);
+			}
+			else
+				break;
+		}
+		else
+			break;
+		if (parsing_result == false)
+			break;
+		++server_index;
+	}
+	if (server_index == MAX_VSERVER)
+	{
+		parsing_result = false;
+		std::cerr << RED << "Error Config : more than " << MAX_VSERVER << '.' << RESET << std::endl;
+	}
 	delete[] file_content;
 	return parsing_result;
 }
 
+/*
+Conventions du parsing:
+	Les mots en maj tels que SERVER designent des tokens (voir ServerUtils.h->enum token_type).
+	Les fonctions commencants par rule sont des regles.
+*/
 bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
 {
+	/*RULE : SERVER END rPort() rIp() rName() rError() rLocation() SERVER ou .end()*/
+	//Verification du nombre de token.
 	if ((std::distance(it, token_liste.end()) > 2))
 	{
 		if ((*it).type == SERVER && (*(it + 1)).type == END)
 		{
+			//skip SERVER et END.
 			it += 2;
-			if (rulePort(token_liste, it, &line) == false)
+			//Increment de line.
+			++line;
+			//Appel des regles rPort() rIp() rName() rError() rLocation().
+			if (rulePort(token_liste, it, line) == false)
 				return false;
-			if (ruleIP(token_liste, it, &line) == false)
+			if (ruleIp(token_liste, it, line) == false)
 				return false;
-			if (ruleName(token_liste, it, &line) == false)
+			if (ruleName(token_liste, it, line) == false)
 				return false;
-			if (ruleError(token_liste, it, &line))
+			if (ruleError(token_liste, it, line))
 				return false;
-			if (ruleLocation(token_liste, it, &line) == false)
+			if (ruleLocation(token_liste, it, line) == false)
 				return false;
-			if (it == token_liste.end(token_liste, it, &line))
+			//Test du token de fin de bloc, SERVER ou fin de vecteur.
+			if (it == token_liste.end())
 				return true;
 			if ((*it).type == SERVER)
 				return true;
 			return false;
 		}
-	}
-	else
-	{
-		std::cerr >> RED >> "Error : config.txt, line " >> line >> "near ";
+		std::cerr << RED << "Error Config : line " << line << "near ";
 		std::cerr.write((*it).str, (*it).len);
-		std::cerr >> RESET >> std::endl;
+		std::cerr << RESET << std::endl;
 		return false;
 	}
-			
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+	return false;
 }
+
+bool Server::rulePort(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : listen word \n*/
+	int port = 0;
+
+	//Verification du nombre de token.	
+	if ((std::distance(it, token_liste.end()) > 3))
+	{
+		if ((*it).type == PORT)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation du port a la strut s_config.
+					if (is_valid_port_number(it + 1, port) == true)
+					{
+						(*(cnf + server_index)).server_addr.sin_port = port;
+						//skip PORT WORD END
+						it += 3;
+						//Increment de line.
+						++line;
+						return true;
+					}
+					std::cerr << RED << "Error Config : line " << line;
+					std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+					std::cerr << " is not a port number.";
+					std::cerr << RESET << std::endl;
+					return false;
+				}
+				std::cerr << RED << "Error Config : line " << line << "near ";
+				std::cerr.write((*(it + 2)).str, (*(it + 2)).len);
+				std::cerr << RESET << std::endl;
+				return false;
+			}
+			std::cerr << RED << "Error Config : line " << line << "near ";
+			std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+			std::cerr << RESET << std::endl;
+			return false;
+		}
+		std::cerr << RED << "Error Config : line " << line << "near ";
+		std::cerr.write((*it).str, (*it).len);
+		std::cerr << RESET << std::endl;
+		return false;
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::ruleIp(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : host word \n*/
+	u_int32_t ip = 0;
+
+	//Verification du nombre de token.	
+	if ((std::distance(it, token_liste.end()) > 3))
+	{
+		if ((*it).type == IP)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation du port a la strut s_config.
+					if ((ip = ftInetAddr(it)) != INADDR_NONE)
+					{
+						(*(cnf + server_index)).server_addr.sin_addr.s_addr = ip;
+						(*(cnf + server_index)).server_addr.sin_family = AF_INET;
+						//skip IP WORD END
+						it += 3;
+						//Increment de line.
+						++line;
+						return true;
+					}
+					std::cerr << RED << "Error Config : line " << line;
+					std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+					std::cerr << " is not an ip address.";
+					std::cerr << RESET << std::endl;
+					return false;
+				}
+				std::cerr << RED << "Error Config : line " << line << "near ";
+				std::cerr.write((*(it + 2)).str, (*(it + 2)).len);
+				std::cerr << RESET << std::endl;
+				return false;
+			}
+			std::cerr << RED << "Error Config : line " << line << "near ";
+			std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+			std::cerr << RESET << std::endl;
+			return false;
+		}
+		std::cerr << RED << "Error Config : line " << line << "near ";
+		std::cerr.write((*it).str, (*it).len);
+		std::cerr << RESET << std::endl;
+		return false;
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::ruleName(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : NAME rName_() | z*/
+	if ((std::distance(it, token_liste.end()) > 1))
+	{
+		if ((*it).type == NAME)
+		{
+			++it;
+			ruleName_(token_liste, it, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP)
+		{
+			std::cerr << RED << "Error Config : line " << line << "near ";
+			std::cerr.write((*it).str, (*it).len);
+			std::cerr << RESET << std::endl;
+			return false;
+		}
+	}
+	return true;
+}
+
+bool Server::ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	if ((std::distance(it, token_liste.end()) > 2))
+	{
+		if ((*(it)).type == WORD)
+		{
+			if ((*(it + 1)).type == END)
+			{
+				for(int i = 0; i < (*it).len; ++i)
+					((*(cnf + server_index)).names).push_back(*((*it).str + i));
+				((*(cnf + server_index)).names).push_back('\n');
+				it += 2;
+				++line;
+				return true;
+			}
+			else
+			{
+				for(int i = 0; i < (*it).len; ++i)
+					((*(cnf + server_index)).names).push_back(*((*it).str + i));
+				((*(cnf + server_index)).names).push_back('\n');
+				++it;
+				ruleName_(token_liste, it, line);
+			}
+			std::cerr << RED << "Error Config : line " << line << "near ";
+			std::cerr.write((*(it + 2)).str, (*(it + 2)).len);
+			std::cerr << RESET << std::endl;
+			return false;
+		}
+		std::cerr << RED << "Error Config : line " << line << "near ";
+		std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+		std::cerr << RESET << std::endl;
+		return false;
+	}	
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+//bool Server::ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+//bool Server::ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
 
 void Server::run(void)
 {

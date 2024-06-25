@@ -26,6 +26,7 @@
 #include <sys/socket.h> //send();
 #include <sys/stat.h> //stat()
 #include <stdint.h> //unint32_t
+#include "ServerUtils.h"
 
 #define TIMEOUT 1000000
 #define SELECT_TIMEOUT_SEC 0
@@ -44,7 +45,7 @@
 
 typedef struct s_location
 {
-	std::map<char*, bool> method_map;
+	std::map<std::string, bool> method_map;
 	char root[PATH_MAX];
 	bool autoindex;
 	char index[PATH_MAX];
@@ -55,8 +56,8 @@ typedef struct s_location
 typedef struct s_config
 {
 	struct sockaddr_in server_addr;
-	char name[MAX_SERVER_NAME_LEN];
-	std::map<char*, char*> error_map;
+	std::vector<char> names;
+	std::map<std::string, std::string> error_map;
 	size_t max_body_size;
 	std::map<char*, t_location> location_map;	
 } t_config;
@@ -76,11 +77,18 @@ class Server
 		char *body;
 		int opt;
 		int cnf_len;
+		int server_index;
 	public:
 		Server(void);
 		~Server(void);
 		bool parsing(void);
-		bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it)
+		bool ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool rulePort(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleIp(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleName(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		void run(void);
 		void setup(void);
 		void communicate(void);

@@ -23,21 +23,22 @@ char* loadFileToBuffer(const char* filename)
 	exit(EXIT_FAILURE);
 }
 
-uint32_t ftInetAddr(const char *ip_address)
+uint32_t ftInetAddr(const std::vector<t_token>::iterator &it)
 {
+	const char *ip_address = (*it).str;
 	unsigned long int result = 0;
 	int byte, i;
 
-	for (i = 0; *(ip_address + i) != ';' && *(ip_address + i) != '\n' && *(ip_address + i); ++i)
+	for (i = 0; *(ip_address + i) != '\n' && *(ip_address + i); ++i)
 		if (!isdigit(*(ip_address + i)) && *(ip_address + i) != '.')
 			return INADDR_NONE;
-	for (i = 1; *ip_address != ';' && *ip_address != '\n' && *ip_address; ++i)
+	for (i = 1; *ip_address != '\n' && *ip_address; ++i)
 	{
 		byte = atoi(ip_address);
 		if (byte < 0 || byte > 255)
 			return INADDR_NONE;
 		result += (byte << ((4 - i) * 8));
-		while(*ip_address != '.' && *ip_address != ';' && *ip_address != '\n' && *ip_address)
+		while(*ip_address != '.' && *ip_address != '\n' && *ip_address)
 			++ip_address;
 		if (*ip_address == '.')
 			++ip_address;
@@ -50,7 +51,7 @@ t_token findType(char *buffer, int *index)
 	t_token token;
 	int len = 0;
 
-	while (*(buffer + len) && *(buffer + len) != '\n' && std::isspace(static_cast<unsigned char>(*(buffer + len)))
+	while (*(buffer + len) && *(buffer + len) != '\n' && std::isspace(static_cast<unsigned char>(*(buffer + len))))
 		++len;
 	(*index) += len;
 	token.str = buffer;
@@ -121,7 +122,7 @@ std::vector<t_token> tokenizer(char *buffer)
 
 	while (*(buffer + i))
 	{
-		if (*(buffer + i) == '\n' || std::isspace(static_cast<unsigned char>(*(buffer + i)))
+		if (*(buffer + i) == '\n' || std::isspace(static_cast<unsigned char>(*(buffer + i))))
 		{
 			if (*(buffer + i) == '\n')
 			{
@@ -139,4 +140,18 @@ std::vector<t_token> tokenizer(char *buffer)
 		}
 	}
 	return token_liste;
+}
+
+bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port)
+{
+	for (size_t i = 0; i < (*it).len; ++i)
+		if (!std::isdigit(*((*it).str + i)))
+			return false;
+	// Convertir la chaîne en entier
+	port = std::atoi((*it).str);
+	// Vérifier si le numéro de port est dans la plage valide (1 à 65535)
+	if (port < 1 || port > 65535)
+		return false;
+	port = htons(port);
+	return true;
 }
