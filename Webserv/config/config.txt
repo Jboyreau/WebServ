@@ -10,7 +10,7 @@ server
 	error_page 504 /error/504.html
 	client_max_body_size 84000000
 	location /
-		allow_methods GET
+		allow_methods GET POST
 		root ./
 		autoindex on
 		index ./default/default.html

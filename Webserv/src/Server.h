@@ -16,7 +16,7 @@
 #include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR; inet_ntoa(); send();
 #include <netinet/in.h> //IPPROTO_TCP;
 #include <arpa/inet.h>	//ntohs();
-#include <string.h> //memeset(); strcpy; strcat();
+#include <string.h> //memset(); strcpy; strcat();
 #include <netdb.h>
 #include <memory.h>
 #include <errno.h>
@@ -59,13 +59,14 @@ typedef struct s_config
 	std::vector<char> names;
 	std::map<std::string, std::string> error_map;
 	size_t max_body_size;
-	std::map<char*, t_location> location_map;	
+	std::map<std::string, t_location> location_map;	
 } t_config;
 
 class Server
 {
 	private:
 		t_config cnf[MAX_VSERVER];
+		t_location temp;
 		char response[HTTP_HEADER_SIZE];
 		char request[HTTP_HEADER_SIZE];
 		int *virtual_servers[MAX_VSERVER];
@@ -90,6 +91,13 @@ class Server
 		bool ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleMethode(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleRoot(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleAutoIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleReturn(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		void run(void);
 		void setup(void);
 		void communicate(void);

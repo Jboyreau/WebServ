@@ -23,6 +23,20 @@ char* loadFileToBuffer(const char* filename)
 	exit(EXIT_FAILURE);
 }
 
+bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port)
+{
+	for (size_t i = 0; i < (*it).len; ++i)
+		if (!std::isdigit(*((*it).str + i)))
+			return false;
+	// Convertir la chaîne en entier
+	port = std::atoi((*it).str);
+	// Vérifier si le numéro de port est dans la plage valide (1 à 65535)
+	if (port < 1 || port > 65535)
+		return false;
+	port = htons(port);
+	return true;
+}
+
 uint32_t ftInetAddr(const std::vector<t_token>::iterator &it)
 {
 	const char *ip_address = (*it).str;
@@ -141,21 +155,6 @@ std::vector<t_token> tokenizer(char *buffer)
 	}
 	return token_liste;
 }
-
-bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port)
-{
-	for (size_t i = 0; i < (*it).len; ++i)
-		if (!std::isdigit(*((*it).str + i)))
-			return false;
-	// Convertir la chaîne en entier
-	port = std::atoi((*it).str);
-	// Vérifier si le numéro de port est dans la plage valide (1 à 65535)
-	if (port < 1 || port > 65535)
-		return false;
-	port = htons(port);
-	return true;
-}
-
 
 bool configErr(const std::vector<t_token>::iterator &it, int line)
 {

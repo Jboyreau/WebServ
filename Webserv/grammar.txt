@@ -5,7 +5,7 @@ SERVER:		server \n PORT() IP() NAME() ERROR() LOCATION() (server | end)
 	NAME:		server_name NAME_() | z
 	NAME_:		word \n | word NAME_()
 	ERROR:		error_page word word \n ERROR() | z
-	SIZE:		client_max_body_size WORD() \n
+	SIZE:		client_max_body_size word \n | z
 	LOCATION : 	location word \n METH() ROOT() AUTOINDEX() INDEX() CGIPATH() RETURN() LOCATION() | z
 		METH:		allow_methods METH_()
 		METH_:		word \n | word METH_()
