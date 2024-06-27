@@ -80,8 +80,10 @@ class Server
 		fd_set exceptfds;
 		char *body;
 		int opt;
-		int cnf_len;
+		size_t cnf_len;
+		unsigned int addr_len;
 		int server_index;
+		int comm_socket_fd;
 	public:
 		Server(void);
 		~Server(void);
@@ -101,13 +103,17 @@ class Server
 		bool ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleReturn(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool canAccessDirectory(const char *path);
-		bool canAccessFile(const char *path, int flag);
 		void run(void);
 		void setup(void);
 		void communicate(void);
-		void acceptServe(int *fd_buffer, t_config cnf);
+		void acceptServe(int *fds_buffer, t_config cnf, int master_sock_tcp_fd);
 		int getMaxFd(int* fds_buffer);
 		void setNonBlocking(int socket);
+		bool canAccessDirectory(const char *path);
+		bool canAccessFile(const char *path, int flag);
+		//TEMP
+		void post_methode(char* response, char *request, int comm_socket_fd, int total_recv_bytes);
+		void respond(char* header, const char *path, int client_socket_fd, int file_size, int block_size);
+		void get_methode(char* response, char *request, int comm_socket_fd);
 };
 #endif

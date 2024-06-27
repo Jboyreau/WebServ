@@ -15,13 +15,12 @@ bool Server::parsing(void)
 	server_index = 0;
 	while (server_index < MAX_VSERVER)
 	{
-std::cout << YELLOW << "DEBUG : server_index = " << server_index << '.' << RESET << std::endl;
 		if (it != token_liste.end())
 		{
 			if ((*it).type == SERVER)
 			{
 				(*(cnf + server_index)).max_body_size = MAX_BODY_SIZE;
-				std::cout << GREEN << "VIRTUAL SERVER " << server_index << " CONFIGURATION : " << std::endl;
+				std::cout << GREEN << "\nVIRTUAL SERVER " << server_index << " CONFIGURATION : " << std::endl;
 				parsing_result = ruleServer(token_liste, it, line);
 			}
 			else
@@ -38,7 +37,7 @@ std::cout << YELLOW << "DEBUG : server_index = " << server_index << '.' << RESET
 		parsing_result = false;
 		std::cerr << RED << "Error Config : more than " << MAX_VSERVER << '.' << RESET << std::endl;
 	}
-std::cout << YELLOW << "DEBUG : parsing_result = " << parsing_result << '.' << RESET << std::endl;
+	cnf_len = server_index;
 	delete[] file_content;
 	return parsing_result;
 }

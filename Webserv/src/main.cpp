@@ -3,7 +3,7 @@
 int main(void)
 {
 	Server server;
-	//server.run();
+	server.run();
 	return EXIT_SUCCESS;
 }
 
