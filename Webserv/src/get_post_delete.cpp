@@ -13,8 +13,6 @@
 
 #define DEFAULT_PATH "./default/default.html"
 #define POST_PATH "./media/gif/upload.gif"
-#define MAX_FILE_SIZE 0x0FFFFFFF
-#define TIMEOUT 1000000
 
 int get_fsize(char *request, int comm_socket_fd)
 {
@@ -30,7 +28,7 @@ int get_fsize(char *request, int comm_socket_fd)
 	}
 	content_length_str += strlen("Content-Length: ");
 	len = atoi(content_length_str);
-	if (len > MAX_FILE_SIZE)
+	if (len > MAX_BODY_SIZE)
 	{
 		//gerer cette erreur plus tard sans oublier l'overflow.
 		return -1;

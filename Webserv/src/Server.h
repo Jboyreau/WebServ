@@ -28,14 +28,14 @@
 #include <stdint.h> //unint32_t
 #include "ServerUtils.h"
 
-#define TIMEOUT 1000000
+#define TIMEOUT 10000000
 #define SELECT_TIMEOUT_SEC 0
 #define SELECT_TIMEOUT_USEC 0
 #define HTTP_HEADER_SIZE 16384
 #define MAX_VSERVER 5
 #define MAX_CLIENT 10
 #define REQUEST_QUEUE_LEN 100
-#define MAX_BODY_SIZE 500000000 //byte
+#define MAX_BODY_SIZE 1000000000 //byte
 #define MAX_SERVER_NAME_LEN 253
 #define CNF_PATH "./config/config.txt"
 #define DEFAULT_INDEX_PATH "./default/default.html"
