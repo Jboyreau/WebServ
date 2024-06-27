@@ -98,6 +98,8 @@ class Server
 		bool ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
 		bool ruleReturn(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool canAccessDirectory(const char *path);
+		bool canAccessFile(const char *path, int flag);
 		void run(void);
 		void setup(void);
 		void communicate(void);

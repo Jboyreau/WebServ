@@ -2,7 +2,6 @@
 
 char* loadFileToBuffer(const char* filename)
 {
-	
 	char *buffer;
 	std::ifstream file(filename, std::ios::binary | std::ios::ate); //Ouvrir en mode binaire et placer le curseur à la fin
 	if (!file)
