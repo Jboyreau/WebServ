@@ -38,6 +38,9 @@
 #define MAX_BODY_SIZE 500000000 //byte
 #define MAX_SERVER_NAME_LEN 253
 #define CNF_PATH "./config/config.txt"
+#define DEFAULT_INDEX_PATH "./default/default.html"
+#define DEFAULT_CGI_PATH "./cgi/php-cgi"
+#define DEFAULT_ROOT "./"
 #define RED "\033[1;31m" //Error
 #define YELLOW "\033[1;33m" //Debug
 #define GREEN "\033[1;32m" //Info

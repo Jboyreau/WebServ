@@ -231,9 +231,9 @@ bool Server::ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::
 				//Recursion.
 				return ruleName_(token_liste, it, line);
 			}
-			return configErr(it + 2, line);
+			return configErr(it, line);
 		}
-		return configErr(it + 1, line);
+		return configErr(it, line);
 	}
 	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
 	std::cerr << RESET << std::endl;
@@ -341,10 +341,10 @@ bool Server::ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token
 	/*RULE : LOC WORD END rMeth() rRoot() rAutoIndex() rIndex() rCgiPath() rReturn() rLocation() | z*/
 	//Clear de la sructure temp.
 	temp.method_map.clear();
-	memset(temp.root, 0, PATH_MAX);
+	std::strcpy(temp.root, DEFAULT_ROOT);
 	temp.autoindex = false;
-	memset(temp.index, 0, PATH_MAX);
-	memset(temp.cgi_path, 0, PATH_MAX);
+	std::strcpy(temp.index, DEFAULT_INDEX_PATH);
+	std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);	
 	memset(temp.ret, 0, PATH_MAX);
 	//Verification du nombre de token.
 	if (std::distance(it, token_liste.end()) >= 3)
@@ -424,6 +424,8 @@ bool Server::ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token
 			{
 				//Ajout des METHODES dans la map methode map.
 				std::string key((*it).str, (*it).len);
+				if (key != "GET" && key != "POST" && key != "DELETE")
+					return configErr(it, line);
 				temp.method_map[key] = true;
 				//skip WORD END.
 				it += 2;
@@ -441,9 +443,9 @@ bool Server::ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token
 				//Recursion.
 				return ruleMethode_(token_liste, it, line);
 			}
-			return configErr(it + 2, line);
+			return configErr(it, line);
 		}
-		return configErr(it + 1, line);
+		return configErr(it, line);
 	}
 	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
 	std::cerr << RESET << std::endl;
@@ -465,6 +467,7 @@ bool Server::ruleRoot(std::vector<t_token> &token_liste, std::vector<t_token>::i
 				if ((*(it + 2)).type == END)
 				{
 					//Affectation de la racine.
+					memset(temp.root, 0, PATH_MAX);
 					for (i = 0; i < (*(it + 1)).len && i < PATH_MAX; ++i)
 						*(temp.root + i) = *((*(it + 1)).str + i);
 					if (i == PATH_MAX)
@@ -562,6 +565,7 @@ bool Server::ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::
 				if ((*(it + 2)).type == END)
 				{
 					//Affectation de la racine.
+					memset(temp.index, 0, PATH_MAX);
 					for (i = 0; i < (*(it + 1)).len && i < PATH_MAX; ++i)
 						*(temp.index + i) = *((*(it + 1)).str + i);
 					if (i == PATH_MAX)
@@ -610,6 +614,7 @@ bool Server::ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>
 				if ((*(it + 2)).type == END)
 				{
 					//Affectation de la racine.
+					memset(temp.cgi_path, 0, PATH_MAX);
 					for (i = 0; i < (*(it + 1)).len && i < PATH_MAX; ++i)
 						*(temp.cgi_path + i) = *((*(it + 1)).str + i);
 					if (i == PATH_MAX)
