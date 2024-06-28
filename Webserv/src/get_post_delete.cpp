@@ -192,7 +192,6 @@ printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
 	}
 printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
 	close(file_to_send_fd);
-	memset(body, 0, total_sent_bytes);
 }
 void Server::get_methode(int comm_socket_fd)
 {

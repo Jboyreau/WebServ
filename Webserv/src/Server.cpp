@@ -23,9 +23,9 @@ Server::~Server(void)
 {
 	if (body)
 		delete[] body;
-	for (int i = 0; i < MAX_VSERVER; ++i)
-		if (virtual_servers[i])
-			delete[] virtual_servers[i];
+	for (server_index = 0; server_index < MAX_VSERVER; ++server_index)
+		if (virtual_servers[server_index])
+			delete[] virtual_servers[server_index];
 }
 
 void Server::run(void)
@@ -38,67 +38,73 @@ void Server::setup(void)
 {
 	int *virtual_server = NULL;
 
-	for (int i = 0; i < cnf_len; ++i)
+	for (server_index = 0; server_index < cnf_len; ++server_index)
 	{
-		for(int k = 0; k < i; ++k)
-			if (cnf[i].server_addr.sin_port == cnf[k].server_addr.sin_port)
+		//Determiner si un autre server bloc partage le meme port.
+		for(int k = 0; k < server_index; ++k)
+			if (cnf[server_index].server_addr.sin_port == cnf[k].server_addr.sin_port)
 			{
-				if ((virtual_servers[i] = new int [MAX_CLIENT + 1]) == NULL)
+				if ((virtual_servers[server_index] = new int [MAX_CLIENT + 2]) == NULL)
 				{
-					std::cerr << RED << "Error : Unable to allocate server " << i << '.' << RESET << std::endl;
+					std::cerr << RED << "Error : Unable to allocate server " << server_index << '.' << RESET << std::endl;
 					exit(EXIT_FAILURE);
 				}
-				*(virtual_servers[i]) =  *(virtual_servers[k]);
-				virtual_server = virtual_servers[i];
-				for (int l = 1; l < MAX_CLIENT + 1; ++l)
+				*(virtual_servers[server_index]) =  *(virtual_servers[k]);//dupliquer le master socket.
+				virtual_server = virtual_servers[server_index];
+				int l;
+				for (l = 1; l < MAX_CLIENT + 1; ++l)
 					virtual_server[l] = -1;
+				*(virtual_servers[server_index] + l) = 1; //la dernierre case permet de determiner si un master socket a ete duplique.
+				*(virtual_servers[k] + l) = 1; //la dernierre case permet de determiner si un master socket a ete duplique.
 				break;
 			}
-		if (virtual_servers[i] != NULL)
+		if (virtual_servers[server_index] != NULL)
 			continue;
-		if ((virtual_servers[i] = new int [MAX_CLIENT + 1]) == NULL)
+		if ((virtual_servers[server_index] = new int [MAX_CLIENT + 2]) == NULL)
 		{
-			std::cerr << RED << "Error : Unable to allocate server " << i << '.' << RESET << std::endl;
+			std::cerr << RED << "Error : Unable to allocate server " << server_index << '.' << RESET << std::endl;
 			exit(EXIT_FAILURE);
 		}
-		virtual_server = virtual_servers[i];
+		virtual_server = virtual_servers[server_index];
 		if ((virtual_server[0] = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
 		{
-			std::cerr << RED << "Error : Unable to create socket for server " << i << '.' << RESET << std::endl;
+			std::cerr << RED << "Error : Unable to create socket for server " << server_index << '.' << RESET << std::endl;
 			exit(EXIT_FAILURE);
 		}
 		if (setsockopt(virtual_server[0], SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) < 0)
 		{
-			std::cerr << RED << "Error : TCP socket creation failed for server " << i << '.' << RESET << std::endl;
+			std::cerr << RED << "Error : TCP socket creation failed for server " << server_index << '.' << RESET << std::endl;
 			exit(EXIT_FAILURE);
 		}
-		if (bind(virtual_server[0], (struct sockaddr *)&(cnf[i].server_addr), sizeof(struct sockaddr)) == -1)
+		if (bind(virtual_server[0], (struct sockaddr *)&(cnf[server_index].server_addr), sizeof(struct sockaddr)) == -1)
 		{
-			std::cerr << RED << "Error : Socket bind failed for server " << i << '.' << RESET << std::endl;
+			std::cerr << RED << "Error : Socket bind failed for server " << server_index << '.' << RESET << std::endl;
 			exit(EXIT_FAILURE);
 		}
 		if (listen(virtual_server[0], REQUEST_QUEUE_LEN) < 0)
 		{
-			std::cerr << RED << "Error : Listen failed for server " << i << '.' << RESET << std::endl;
+			std::cerr << RED << "Error : Listen failed for server " << server_index << '.' << RESET << std::endl;
 			exit(EXIT_FAILURE);
 		}
-		for (int j = 1; j < MAX_CLIENT + 1; ++j)
+		int j;
+		for (j = 1; j < MAX_CLIENT + 1; ++j)
 			virtual_server[j] = -1;
+		virtual_server[j] = 0; //la dernierre case permet de determiner si un server a ete duplique.
 	}
 }
 
 void Server::communicate(void)
 {
-	int *virtual_server, i, j;
+	int *virtual_server, j;
 
 	//Empeche le server de crash lorsqu'un SIGPIPE est recu.
 	signal(SIGPIPE, SIG_IGN);
 	while (1)
 	{
 		//Parcours de chaque server virtuel.
-		for (int i = 0; i < cnf_len; ++i)
+		for (server_index = 0; server_index < cnf_len; ++server_index)
 		{
-			virtual_server = virtual_servers[i];
+			virtual_server = virtual_servers[server_index];
 			//Reset des fd_sets.
 			FD_ZERO(&readfds);
 			FD_ZERO(&writefds);
@@ -116,7 +122,7 @@ void Server::communicate(void)
 			//Activation des sockets ajoutes dans les fd_sets.
 			select(getMaxFd(virtual_server) + 1, &readfds, &writefds, &exceptfds, &timeout);
 			//Le server communique avec le client suivant sa config.
-			acceptServe(virtual_server, cnf[i], *virtual_server);
+			acceptServe(virtual_server, cnf[server_index], *virtual_server);
 		}
 	}
 }
@@ -138,14 +144,14 @@ bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_l
 			std::cout << "DEBUG : found current_path = " << current_path << std::endl;
 			return true;
 		}
-		if (*current_path_end == '/')
+		if (current_path_end != current_path && *current_path_end == '/')
 			--current_path_end;
 		while (current_path_end != current_path && *current_path_end != '/')
 			--current_path_end;
 		if (*current_path_end == '/')
 			*(current_path_end + 1) = 0;
 	}
-	if (len == 1 && *current_path == '/')
+	if (*current_path == '/' && current_path == current_path_end)
 		if (location_map.find(current_path) != location_map.end())
 		{
 			location = location_map[current_path];
@@ -201,7 +207,7 @@ void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
 		{
 			comm_socket_fd = *(fds_buffer + i);
 			setNonBlocking(comm_socket_fd);
-			memset(request, 0, HTTP_HEADER_SIZE);
+			//Lire du header de la request.
 			int total_recv_bytes = 0;
 			int recv_bytes = 0;
 			char *header_end = NULL;
@@ -213,23 +219,27 @@ void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
 				total_recv_bytes += recv_bytes * (recv_bytes > 0);
 				++time_cout;
 			}
-			//Trouver la bonne config suivant le nom.
-			int name_len = 0;
-			char *ptr;
-			if ((ptr = strstr(request, "Host")) != NULL)
+			//Trouver la bonne config suivant le nom.	
+			char *ptr = NULL;
+			if (*(virtual_servers[server_index] + MAX_CLIENT + 1) == 1)
 			{
-				for (ptr += 6; *(ptr + name_len) != ':'; ++name_len)
-					;
-				std::string name(ptr, name_len);
-				std::cout << YELLOW << "DEBUG : NAME = " << name << RESET << std::endl;
-				int j;
-				for (j = 0; j < cnf_len; ++j)
-					if (*(virtual_servers[j]) == master_sock_tcp_fd && cnf[j].name_map.find(name) != cnf[j].name_map.end())
-					{
-						conf = cnf[cnf[j].name_map[name]];
-						break;
-					}
-				std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;	
+				std::cout << "DEUBUG DUP" << std::endl;
+				if ((ptr = strstr(request, "Host")) != NULL)
+				{
+					int name_len = 0;
+					for (ptr += 6; *(ptr + name_len) != ':'; ++name_len)
+						;
+					std::string name(ptr, name_len);
+					std::cout << YELLOW << "DEBUG : NAME = " << name << RESET << std::endl;
+					int j;
+					for (j = 0; j < cnf_len; ++j)
+						if (*(virtual_servers[j]) == master_sock_tcp_fd && cnf[j].name_map.find(name) != cnf[j].name_map.end())
+						{
+							conf = cnf[cnf[j].name_map[name]];
+							break;
+						}
+					std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;	
+				}
 			}
 			//Initialiser le pointeur de fin du header et la taille du body chunk.
 			header_end += 4;
