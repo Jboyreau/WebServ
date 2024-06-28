@@ -122,7 +122,8 @@ void Server::communicate(void)
 			//Activation des sockets ajoutes dans les fd_sets.
 			select(getMaxFd(virtual_server) + 1, &readfds, &writefds, &exceptfds, &timeout);
 			//Le server communique avec le client suivant sa config.
-			acceptServe(virtual_server, cnf[server_index], *virtual_server);
+			conf = cnf[server_index];
+			acceptServe(virtual_server,*virtual_server);
 		}
 	}
 }
@@ -137,11 +138,11 @@ bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_l
 
 	while (current_path != current_path_end)
 	{
-		std::cout << "DEBUG : loop current_path = " << current_path << std::endl;
+		std::cout << YELLOW << "DEBUG : loop current_path = " << current_path << RESET << std::endl;
 		if (location_map.find(current_path) != location_map.end())
 		{
 			location = location_map[current_path];
-			std::cout << "DEBUG : found current_path = " << current_path << std::endl;
+			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
 			return true;
 		}
 		if (current_path_end != current_path && *current_path_end == '/')
@@ -155,13 +156,13 @@ bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_l
 		if (location_map.find(current_path) != location_map.end())
 		{
 			location = location_map[current_path];
-			std::cout << "DEBUG : found current_path = " << current_path << std::endl;
+			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
 			return true;
 		}	
 	return false;
 }
 
-void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
+void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 {
 	int i;
 
@@ -223,7 +224,7 @@ void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
 			char *ptr = NULL;
 			if (*(virtual_servers[server_index] + MAX_CLIENT + 1) == 1)
 			{
-				std::cout << "DEUBUG DUP" << std::endl;
+				std::cout << YELLOW << "DEUBUG DUPLICATE" << RESET << std::endl;
 				if ((ptr = strstr(request, "Host")) != NULL)
 				{
 					int name_len = 0;
@@ -238,7 +239,13 @@ void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
 							conf = cnf[cnf[j].name_map[name]];
 							break;
 						}
-					std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;	
+					for (j = 0; j < cnf_len; ++j)
+						if (*(virtual_servers[j]) == master_sock_tcp_fd)
+						{
+							conf = cnf[cnf[j].name_map[name]];
+							break;
+						}
+					std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;
 				}
 			}
 			//Initialiser le pointeur de fin du header et la taille du body chunk.
@@ -254,7 +261,6 @@ void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
 				break;
 			}
 			//Trouver la bonne location.
-			t_location location;
 			if (conf.location_map.size() != 0)
 			{
 				int loc_len = 0;
@@ -266,61 +272,83 @@ void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
 					++loc_len;
 				std::string location_key(ptr, loc_len);
 				std::cout << GREEN << "LocationKey : " << location_key << RESET << std::endl;
-				if (findLongestMatchingPath(location_key.c_str(), conf.location_map, location))
+				if (findLongestMatchingPath(location_key.c_str(), conf.location_map, temp))
 				{
 					std::cout << GREEN << "LocationPath_ : " << location_key << RESET << std::endl;
 				}
 				else
 				{
-					location.method_map["GET"] = true;
-					location.method_map["POST"] = true;
-					std::strcpy(location.root, DEFAULT_ROOT);
-					location.autoindex = false;
-					std::strcpy(location.index, DEFAULT_INDEX_PATH);
-					std::strcpy(location.cgi_path, DEFAULT_CGI_PATH);
-					memset(location.ret, 0, PATH_MAX);
+					temp.method_map["GET"] = true;
+					temp.method_map["POST"] = true;
+					std::strcpy(temp.root, DEFAULT_ROOT);
+					temp.autoindex = false;
+					std::strcpy(temp.index, DEFAULT_INDEX_PATH);
+					std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);
+					memset(temp.ret, 0, PATH_MAX);
 					std::cout << GREEN << "LocationPath0 : " << "default" << RESET << std::endl;
 				}
 			}
 			else
 			{
-				location.method_map["GET"] = true;
-				location.method_map["POST"] = true;
-				std::strcpy(location.root, DEFAULT_ROOT);
-				location.autoindex = false;
-				std::strcpy(location.index, DEFAULT_INDEX_PATH);
-				std::strcpy(location.cgi_path, DEFAULT_CGI_PATH);
-				memset(location.ret, 0, PATH_MAX);
+				temp.method_map["GET"] = true;
+				temp.method_map["POST"] = true;
+				std::strcpy(temp.root, DEFAULT_ROOT);
+				temp.autoindex = false;
+				std::strcpy(temp.index, DEFAULT_INDEX_PATH);
+				std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);
+				memset(temp.ret, 0, PATH_MAX);
 				std::cout << GREEN << "LocationPath1 : " << "default" << RESET << std::endl;
 			}
 			//Afficher location params.
 			std::cout << GREEN << "\tLocation : "<< RESET << std::endl;
-			if (location.method_map.find("GET") != location.method_map.end())
-        		std::cout << GREEN << "\t\t\"GET\" " << location.method_map["GET"] << RESET << std::endl;
-			if (location.method_map.find("POST") != location.method_map.end())
-        		std::cout << GREEN << "\t\t\"POST\" " << location.method_map["POST"] << RESET << std::endl;
-			if (location.method_map.find("DELETE") != location.method_map.end())
-        		std::cout << GREEN << "\t\t\"DELETE\" " << location.method_map["DELETE"] << RESET << std::endl;
-			std::cout << GREEN << "\t\tROOT : " << location.root << RESET << std::endl;
-			std::cout << GREEN << "\t\tAUTOINDEX : " << location.autoindex << RESET << std::endl;
-			std::cout << GREEN << "\t\tINDEX : " << location.index << RESET << std::endl;
-			std::cout << GREEN << "\t\tCGIPATH : " << location.cgi_path << RESET << std::endl;
-			std::cout << GREEN << "\t\tRETURN : " << location.ret << RESET << std::endl;
+			if (temp.method_map.find("GET") != temp.method_map.end())
+				std::cout << GREEN << "\t\t\"GET\" " << temp.method_map["GET"] << RESET << std::endl;
+			if (temp.method_map.find("POST") != temp.method_map.end())
+				std::cout << GREEN << "\t\t\"POST\" " << temp.method_map["POST"] << RESET << std::endl;
+			if (temp.method_map.find("DELETE") != temp.method_map.end())
+				std::cout << GREEN << "\t\t\"DELETE\" " << temp.method_map["DELETE"] << RESET << std::endl;
+			std::cout << GREEN << "\t\tROOT : " << temp.root << RESET << std::endl;
+			std::cout << GREEN << "\t\tAUTOINDEX : " << temp.autoindex << RESET << std::endl;
+			std::cout << GREEN << "\t\tINDEX : " << temp.index << RESET << std::endl;
+			std::cout << GREEN << "\t\tCGIPATH : " << temp.cgi_path << RESET << std::endl;
+			std::cout << GREEN << "\t\tRETURN : " << temp.ret << RESET << std::endl;
 			//servir le client.
+			int methode_len;
+			for (methode_len = 0; *(request + methode_len) != ' ' && methode_len < HTTP_HEADER_SIZE; ++methode_len)
+				;
+			std::string methode_key(request, methode_len);
+			std::cout << RED << "Methode key :" << methode_key << RESET <<std::endl;
 			switch (*request + *(request + 1))
 			{
 				case GET :
 					if (FD_ISSET(comm_socket_fd, &writefds))
-						get_methode(comm_socket_fd);
+					{
+						if (temp.method_map.find(methode_key) != temp.method_map.end())
+						{
+							get_methode(comm_socket_fd);
+						}
+						else
+							std::cout << RED << "GET not allowed\n";//send error method not allowed
+					}	
 					break;
 				case POST :
-					post_methode(header_end, comm_socket_fd, body_chunk_size);
+					if (temp.method_map.find(methode_key) != temp.method_map.end())
+					{
+						post_methode(header_end, comm_socket_fd, body_chunk_size);
+					}
+					else
+						std::cout << RED << "POST not allowed\n";//send error method not allowed
 					break;
 				case DELETE :
-					delete_methode(comm_socket_fd);
+					if (temp.method_map.find(methode_key) != temp.method_map.end())
+					{
+						delete_methode(comm_socket_fd);
+					}
+					else
+						std::cout << RED << "DELETE not allowed\n";//send error method not allowed
 					break;
 				default :
-					error_methode(comm_socket_fd);
+					std::cout << RED << "NOOB not allowed\n";//send error method not handeled
 			}
 			std::cout << YELLOW << "\n####RESPONSE CONTENT####:\n" << response << RESET << std::endl;
 			close(comm_socket_fd);

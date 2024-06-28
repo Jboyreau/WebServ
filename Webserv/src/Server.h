@@ -69,6 +69,7 @@ class Server
 {
 	private:
 		t_config cnf[MAX_VSERVER];
+		t_config conf;
 		t_location temp;
 		char response[HTTP_HEADER_SIZE];
 		char request[HTTP_HEADER_SIZE];
@@ -106,7 +107,7 @@ class Server
 		void run(void);
 		void setup(void);
 		void communicate(void);
-		void acceptServe(int *fds_buffer, t_config cnf, int master_sock_tcp_fd);
+		void acceptServe(int *fds_buffer, int master_sock_tcp_fd);
 		int getMaxFd(int* fds_buffer);
 		void setNonBlocking(int socket);
 		bool canAccessDirectory(const char *path);
