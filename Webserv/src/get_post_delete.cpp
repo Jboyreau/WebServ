@@ -46,53 +46,6 @@ static void feed_path(char *request, char *path)
 	for (; *(request + i + j) != '\n' && *(request + i + j) != ' ' && *(request + i + j); ++j)
 		*(path + j) = *(request + i + j);
 	*(path + j) = 0;
-printf("FIND PATH DEBUG! EXTRACTED PATH = %s\n", path);
-}
-
-void Server::respond(const char *path, int client_socket_fd, int file_size)
-{
-	int response_len = strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, read_bytes, i;
-
-	//Ouverture du fichier a envoyer:
-	file_to_send_fd = open(path, O_RDONLY);
-	if (file_to_send_fd < 0)
-	{
-		printf("Error: unable to open %s\n", path);
-		return;
-	}
-	//Envoi du header
-	//Verification des valeurs de retour de send() pour eviter les infinites loop en cas de spam.
-	total_sent_bytes = 0;
-	sent_bytes = 1;
-	while (total_sent_bytes < response_len && sent_bytes > 0)
-	{
-		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0); //Envoie du chunk.
-		total_sent_bytes += sent_bytes;
-	}
-	//Envoi du fichier
-printf("RESPOND DEBUG: file_size = %d\n", file_size);
-	read_bytes = 0;
-	total_sent_bytes = 0;
-	i = 0;
-	while (total_sent_bytes < file_size && i < TIMEOUT)
-	{
-		read_bytes = read(file_to_send_fd, body + total_sent_bytes, file_size); //Chargement du chunk dans le buffer.
-		total_sent_bytes += read_bytes * (read_bytes > 0);
-		++i;
-	}
-printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
-	i = 0;
-	sent_bytes = 0;
-	total_sent_bytes = 0;
-	while (total_sent_bytes < file_size && i < TIMEOUT)
-	{
-		sent_bytes = send(client_socket_fd, body + total_sent_bytes, file_size, 0); //Envoie du chunk.
-		total_sent_bytes += sent_bytes * (sent_bytes > 0);
-		++i;
-	}
-printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
-	close(file_to_send_fd);
-	memset(body, 0, total_sent_bytes);
 }
 
 static void respond_temp(char* header_body, char* path, int comm_socket_fd)
@@ -196,6 +149,51 @@ static void fill_header(const char* path, char* header_body, char* body_size, in
 	strcat(header_body, "\r\n");
 }
 
+void Server::respond(const char *path, int client_socket_fd, int file_size)
+{
+	int response_len = strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, read_bytes, i;
+
+	//Ouverture du fichier a envoyer:
+	file_to_send_fd = open(path, O_RDONLY);
+	if (file_to_send_fd < 0)
+	{
+		printf("Error: unable to open %s\n", path);
+		return;
+	}
+	//Envoi du header
+	//Verification des valeurs de retour de send() pour eviter les infinites loop en cas de spam.
+	total_sent_bytes = 0;
+	sent_bytes = 1;
+	while (total_sent_bytes < response_len && sent_bytes > 0)
+	{
+		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0); //Envoie du chunk.
+		total_sent_bytes += sent_bytes;
+	}
+	//Envoi du fichier
+printf("RESPOND DEBUG: file_size = %d\n", file_size);
+	read_bytes = 0;
+	total_sent_bytes = 0;
+	i = 0;
+	while (total_sent_bytes < file_size && i < TIMEOUT)
+	{
+		read_bytes = read(file_to_send_fd, body + total_sent_bytes, file_size); //Chargement du chunk dans le buffer.
+		total_sent_bytes += read_bytes * (read_bytes > 0);
+		++i;
+	}
+printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
+	i = 0;
+	sent_bytes = 0;
+	total_sent_bytes = 0;
+	while (total_sent_bytes < file_size && i < TIMEOUT)
+	{
+		sent_bytes = send(client_socket_fd, body + total_sent_bytes, file_size, 0); //Envoie du chunk.
+		total_sent_bytes += sent_bytes * (sent_bytes > 0);
+		++i;
+	}
+printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
+	close(file_to_send_fd);
+	memset(body, 0, total_sent_bytes);
+}
 void Server::get_methode(int comm_socket_fd)
 {
 	char body_size[14], path[PATH_MAX];
@@ -269,7 +267,7 @@ printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
     close(file_fd);
 }
 
-void delete_methode(char* header_body, char *request, int comm_socket_fd)
+void Server::delete_methode(int comm_socket_fd)
 {
 	char body_size[14], path[PATH_MAX];
 	const char *success_message = "HTTP/1.1 200 OK\nContent-Length: 0\n\n";
@@ -288,13 +286,13 @@ void delete_methode(char* header_body, char *request, int comm_socket_fd)
 	}
 }
 
-void error_methode(char* header_body, char *request, int comm_socket_fd)
+void Server::error_methode(int comm_socket_fd)
 {
 	const char *body_ = "ERROR methode.";
 	char body_size[14], path[PATH_MAX];
 
 	feed_path(request, path);
-	fill_header(path, header_body, body_size, strlen(body_));
-	strcat(header_body, body_);
-	respond_temp(header_body, path, comm_socket_fd);
+	fill_header(path, response, body_size, strlen(body_));
+	strcat(response, body_);
+	respond_temp(response, path, comm_socket_fd);
 }

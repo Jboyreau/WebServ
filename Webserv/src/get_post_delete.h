@@ -28,7 +28,4 @@ typedef enum {
 	DELETE = 'D' + 'E',
 } MethodType;
 
-void get_methode(char* response, char *request, int comm_socket_fd);
-void delete_methode(char* response, char *request, int comm_socket_fd);
-void error_methode(char* response, char *request, int comm_socket_fd);
 #endif

@@ -115,5 +115,7 @@ class Server
 		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
 		void respond(const char *path, int client_socket_fd, int file_size);
 		void get_methode(int comm_socket_fd);
+		void delete_methode(int comm_socket_fd);
+		void error_methode(int comm_socket_fd);
 };
 #endif

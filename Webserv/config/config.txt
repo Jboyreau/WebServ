@@ -1,7 +1,7 @@
 server
 	listen 2000
 	host 127.0.0.1
-	server_name localhost_ example.com
+	server_name localhost example.com
 	error_page 403 /error/403.html
 	error_page 404 /error/404.html
 	error_page 500 /error/500.html
@@ -15,7 +15,7 @@ server
 		autoindex on
 		index ./default/default.html
 	location /media/
-		allow_methods GET
+		allow_methods GET DELETE
 		root ./media/
 		autoindex on
 	location /cgi/
@@ -32,7 +32,7 @@ server
 server
 	listen 2000
 	host 127.0.0.1
-	server_name YuyuHakusho Gintama localhost
+	server_name YuyuHakusho Gintama localhost_
 	error_page 403 /error/403.html
 	client_max_body_size 84000000
 server
