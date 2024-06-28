@@ -59,7 +59,7 @@ typedef struct s_location
 typedef struct s_config
 {
 	struct sockaddr_in server_addr;
-	std::vector<char> names;
+	std::map<std::string, int> name_map;
 	std::map<std::string, std::string> error_map;
 	size_t max_body_size;
 	std::map<std::string, t_location> location_map;	
@@ -112,8 +112,8 @@ class Server
 		bool canAccessDirectory(const char *path);
 		bool canAccessFile(const char *path, int flag);
 		//TEMP
-		void post_methode(char* response, char *request, int comm_socket_fd, int total_recv_bytes);
-		void respond(char* header, const char *path, int client_socket_fd, int file_size, int block_size);
-		void get_methode(char* response, char *request, int comm_socket_fd);
+		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
+		void respond(const char *path, int client_socket_fd, int file_size);
+		void get_methode(int comm_socket_fd);
 };
 #endif

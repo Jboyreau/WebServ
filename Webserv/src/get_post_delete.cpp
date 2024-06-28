@@ -36,23 +36,6 @@ int get_fsize(char *request, int comm_socket_fd)
 	return len;
 }
 
-static int purge_request(char **request)
-{
-    char *ptr = *request;
-    int i = 0;
-
-    while (*ptr + i)
-    {
-        if (strncmp(ptr + i, "\r\n\r\n", 4) == 0)
-        {
-            *request = ptr + 4 + i;
-            return i + 4;
-        }
-        ++i;
-    }
-	return i + 4;
-}
-
 static void feed_path(char *request, char *path)
 {
 	int i, j = 1;
@@ -66,9 +49,9 @@ static void feed_path(char *request, char *path)
 printf("FIND PATH DEBUG! EXTRACTED PATH = %s\n", path);
 }
 
-void Server::respond(char* header, const char *path, int client_socket_fd, int file_size, int block_size)
+void Server::respond(const char *path, int client_socket_fd, int file_size)
 {
-	int header_len = strlen(header), file_to_send_fd, total_sent_bytes, sent_bytes, bytes_chunk_size, read_bytes, i;
+	int response_len = strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, read_bytes, i;
 
 	//Ouverture du fichier a envoyer:
 	file_to_send_fd = open(path, O_RDONLY);
@@ -81,9 +64,9 @@ void Server::respond(char* header, const char *path, int client_socket_fd, int f
 	//Verification des valeurs de retour de send() pour eviter les infinites loop en cas de spam.
 	total_sent_bytes = 0;
 	sent_bytes = 1;
-	while (total_sent_bytes < header_len && sent_bytes > 0)
+	while (total_sent_bytes < response_len && sent_bytes > 0)
 	{
-		sent_bytes = send(client_socket_fd, header + total_sent_bytes, header_len - total_sent_bytes, 0); //Envoie du chunk.
+		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0); //Envoie du chunk.
 		total_sent_bytes += sent_bytes;
 	}
 	//Envoi du fichier
@@ -213,7 +196,7 @@ static void fill_header(const char* path, char* header_body, char* body_size, in
 	strcat(header_body, "\r\n");
 }
 
-void Server::get_methode(char* response, char *request, int comm_socket_fd)
+void Server::get_methode(int comm_socket_fd)
 {
 	char body_size[14], path[PATH_MAX];
 	struct stat st;
@@ -223,23 +206,22 @@ void Server::get_methode(char* response, char *request, int comm_socket_fd)
 	{
 /*2.Remplir le header puis L'envoyer avec le body*/
 		fill_header(path, response, body_size, st.st_size);
-		respond(response, path, comm_socket_fd, st.st_size, st.st_blksize);
+		respond(path, comm_socket_fd, st.st_size);
 		return;
 	}
 	if (stat(DEFAULT_PATH, &st) == 0)
 	{
 /*2ALT. pareil que l'etape 2 avec un path par default*/
 		fill_header(DEFAULT_PATH, response, body_size, st.st_size);
-		respond(response, DEFAULT_PATH, comm_socket_fd, st.st_size, st.st_blksize);
+		respond(DEFAULT_PATH, comm_socket_fd, st.st_size);
 		return;
 	}
 	send(comm_socket_fd, "", 0, 0);
 }
 
-
-void Server::post_methode(char* response, char *request, int comm_socket_fd, int total_recv_bytes)
+void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_size)
 {
-	int file_fd, file_size, recv_bytes, wrote_bytes, body_chunk_size, i;
+	int file_fd, file_size, recv_bytes, wrote_bytes, i, total_recv_bytes;
 	char body_size[14], path[PATH_MAX];
 	struct stat st;
 
@@ -249,7 +231,6 @@ void Server::post_methode(char* response, char *request, int comm_socket_fd, int
 	file_size = get_fsize(request, comm_socket_fd);
 	if (file_size < 0)
 		return ;
-	body_chunk_size = total_recv_bytes - purge_request(&request);
 	file_fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
     if (file_fd < 0)
     {
@@ -259,9 +240,10 @@ void Server::post_methode(char* response, char *request, int comm_socket_fd, int
 	//Recevoir le fichier.
 //printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
 	//Ecrire le morceau de body en trop.
+	//TODO::turn into loop.
 	if (body_chunk_size > 0)
 	{
-		recv_bytes = write(file_fd, request, body_chunk_size);
+		recv_bytes = write(file_fd, header_end, body_chunk_size);
 		file_size -= recv_bytes;
 	}
 	total_recv_bytes = 0;
@@ -285,7 +267,6 @@ printf("POST DEBUG file_size = %d\n", file_size);
 	}
 printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
     close(file_fd);
-    memset(body, 0, total_recv_bytes);
 }
 
 void delete_methode(char* header_body, char *request, int comm_socket_fd)

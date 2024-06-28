@@ -66,12 +66,6 @@ bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>:
 				return configErr(it, line);
 			if (ruleName(token_liste, it, line) == false)
 				return configErr(it, line);
-			{
-				std::cout << GREEN << "\tServer Names: ";
-				for (std::vector<char>::iterator it = (*(cnf + server_index)).names.begin(); it != (*(cnf + server_index)).names.end(); ++it)
-					std::cout << *it;
-				std::cout << RESET << std::endl;
-			}
 			if (ruleError(token_liste, it, line) == false)
 				return configErr(it, line);
 			if (ruleSize(token_liste, it, line) == false)
@@ -210,9 +204,10 @@ bool Server::ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::
 			if ((*(it + 1)).type == END)
 			{
 				//Ajout de server name dans un vecteur de char.
-				for(int i = 0; i < (*it).len; ++i)
-					((*(cnf + server_index)).names).push_back(*((*it).str + i));
-				((*(cnf + server_index)).names).push_back(';');
+				std::string name((*it).str, (*it).len);
+				(*(cnf + server_index)).name_map[name] = server_index;
+				std::cout << GREEN << "\tName Key: " << name << RESET << std::endl;
+				std::cout << GREEN << "\tName map Content : " << (*(cnf + server_index)).name_map[name] << RESET << std::endl;
 				//skip WORD END.
 				it += 2;
 				//increment de line;
@@ -222,9 +217,10 @@ bool Server::ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::
 			else if ((*(it + 1)).type == WORD)
 			{
 				//Ajout de server name dans un vecteur de char.
-				for(int i = 0; i < (*it).len; ++i)
-					((*(cnf + server_index)).names).push_back(*((*it).str + i));
-				((*(cnf + server_index)).names).push_back(';');
+				std::string name((*it).str, (*it).len);
+				(*(cnf + server_index)).name_map[name] = server_index;
+				std::cout << GREEN << "\tName Key: " << name << RESET << std::endl;
+				std::cout << GREEN << "\tName map Content : " << (*(cnf + server_index)).name_map[name] << RESET << std::endl;
 				//skip WORD.
 				++it;
 				//Recursion.

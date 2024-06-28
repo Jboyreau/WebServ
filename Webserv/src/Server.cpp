@@ -36,10 +36,26 @@ void Server::run(void)
 
 void Server::setup(void)
 {
-	int *virtual_server;
+	int *virtual_server = NULL;
 
 	for (int i = 0; i < cnf_len; ++i)
 	{
+		for(int k = 0; k < i; ++k)
+			if (cnf[i].server_addr.sin_port == cnf[k].server_addr.sin_port)
+			{
+				if ((virtual_servers[i] = new int [MAX_CLIENT + 1]) == NULL)
+				{
+					std::cerr << RED << "Error : Unable to allocate server " << i << '.' << RESET << std::endl;
+					exit(EXIT_FAILURE);
+				}
+				*(virtual_servers[i]) =  *(virtual_servers[k]);
+				virtual_server = virtual_servers[i];
+				for (int l = 1; l < MAX_CLIENT + 1; ++l)
+					virtual_server[l] = -1;
+				break;
+			}
+		if (virtual_servers[i] != NULL)
+			continue;
 		if ((virtual_servers[i] = new int [MAX_CLIENT + 1]) == NULL)
 		{
 			std::cerr << RED << "Error : Unable to allocate server " << i << '.' << RESET << std::endl;
@@ -99,13 +115,13 @@ void Server::communicate(void)
 			}
 			//Activation des sockets ajoutes dans les fd_sets.
 			select(getMaxFd(virtual_server) + 1, &readfds, &writefds, &exceptfds, &timeout);
-			//TODO::Le server communique avec le client suivant sa config.
+			//Le server communique avec le client suivant sa config.
 			acceptServe(virtual_server, cnf[i], *virtual_server);
 		}
 	}
 }
 
-void Server::acceptServe(int *fds_buffer, t_config cnf, int master_sock_tcp_fd)
+void Server::acceptServe(int *fds_buffer, t_config conf, int master_sock_tcp_fd)
 {
 	int i;
 
@@ -136,9 +152,10 @@ void Server::acceptServe(int *fds_buffer, t_config cnf, int master_sock_tcp_fd)
 			}
 		if (i != MAX_CLIENT)
 			return ;
+		close(comm_socket_fd);
 	}
 	/*Communication avec les clients*/
-	for (int i = 1; i < MAX_CLIENT; ++i)
+	for (int i = 1; i < MAX_CLIENT + 1; ++i)
 	{
 		if (FD_ISSET(*(fds_buffer + i), &exceptfds))
 		{
@@ -153,15 +170,35 @@ void Server::acceptServe(int *fds_buffer, t_config cnf, int master_sock_tcp_fd)
 			memset(request, 0, HTTP_HEADER_SIZE);
 			int total_recv_bytes = 0;
 			int recv_bytes = 0;
-			char *end_header_checker = NULL;
+			char *header_end = NULL;
 			int time_cout = 0;
-			while (total_recv_bytes < HTTP_HEADER_SIZE && end_header_checker == NULL && time_cout < TIMEOUT)
+			while (total_recv_bytes < HTTP_HEADER_SIZE && header_end == NULL && time_cout < TIMEOUT)
 			{
 				recv_bytes = recv(comm_socket_fd, request + total_recv_bytes, HTTP_HEADER_SIZE, 0);
-				end_header_checker = strstr(request, "\r\n\r\n");
+				header_end = strstr(request, "\r\n\r\n");
 				total_recv_bytes += recv_bytes * (recv_bytes > 0);
 				++time_cout;
 			}
+			//Trouver la bonne configi suivant le nom.
+			int name_len = 0;
+			char *ptr;
+			if ((ptr = strstr(request, "Host")) != NULL)
+			{
+				for (ptr += 6; *(ptr + name_len) != ':'; ++name_len)
+					;
+				std::string name(ptr, name_len);
+				std::cout << YELLOW << "DEBUG : NAME = " << name << RESET << std::endl;
+				int j;
+				for (j = 0; j < cnf_len; ++j)
+					if (*(virtual_servers[j]) == master_sock_tcp_fd && cnf[j].name_map.find(name) != cnf[j].name_map.end())
+					{
+						conf = cnf[cnf[j].name_map[name]];
+						break;
+					}
+				std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;	
+			}
+			header_end += 4;
+			int body_chunk_size = total_recv_bytes - (header_end - request);
 			std::cout << GREEN << "Recvd bytes = " << total_recv_bytes << " from client " << comm_socket_fd << RESET << std::endl;
 			std::cout << YELLOW << "\n####REQUEST CONTENT####:\n" << request << RESET << std::endl;
 			if (total_recv_bytes == 0 || recv_bytes < 0)
@@ -175,10 +212,10 @@ void Server::acceptServe(int *fds_buffer, t_config cnf, int master_sock_tcp_fd)
 			{
 				case GET :
 					if (FD_ISSET(comm_socket_fd, &writefds))
-						get_methode(response, request, comm_socket_fd);
+						get_methode(comm_socket_fd);
 					break;
 				case POST :
-					post_methode(response, request, comm_socket_fd, total_recv_bytes);
+					post_methode(header_end, comm_socket_fd, body_chunk_size);
 					break;
 				case DELETE :
 					delete_methode(response, request, comm_socket_fd);

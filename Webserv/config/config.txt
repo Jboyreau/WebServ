@@ -1,7 +1,7 @@
 server
 	listen 2000
 	host 127.0.0.1
-	server_name localhost example.com
+	server_name localhost_ example.com
 	error_page 403 /error/403.html
 	error_page 404 /error/404.html
 	error_page 500 /error/500.html
@@ -30,14 +30,14 @@ server
 		root ./old-page/
 		return ./new-page/
 server
-	listen 2042
-	host 127.42.42.42
-	server_name localhost example.com
+	listen 2000
+	host 127.0.0.1
+	server_name YuyuHakusho Gintama localhost
 	error_page 403 /error/403.html
 	client_max_body_size 84000000
 server
-	listen 2043
-	host 127.43.43.43
+	listen 2003
+	host 127.0.0.3
 	server_name localhost example.com
 	error_page 503 /error/503.html
 	error_page 504 /error/504.html
@@ -63,13 +63,13 @@ server
 		root ./old-page/
 		return ./new-page/
 server
-	listen 2044
-	host 127.44.44.44
+	listen 2004
+	host 127.0.0.4
 	location /
 		allow_methods GET
 		root ./
 		autoindex on
 		index ./default/default.html
 server
-	listen 2045
-	host 127.45.45.45
+	listen 2005
+	host 127.0.0.5
