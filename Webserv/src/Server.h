@@ -47,6 +47,23 @@
 #define YELLOW "\033[1;33m" //Debug
 #define GREEN "\033[1;32m" //Info
 #define RESET "\033[0m"
+#define E411 "./error/411.html"
+#define E413 "./error/413.html"
+#define E404 "./error/404.html"
+#define E403 "./error/403.html"
+#define E500 "./error/500.html"
+#define E502 "./error/502.html"
+#define E503 "./error/503.html"
+#define E504 "./error/504.html"
+#define OK "HTTP/1.1 200 OK\r\n"
+#define H411 "HTTP/1.1 411 Length Required\r\n"
+#define H413 "HTTP/1.1 413 Payload Too Large\r\n"
+#define H404 "HTTP/1.1 404 Not Found\r\n"
+#define H403 "HTTP/1.1 403 Forbidden\r\n"
+#define H500 "HTTP/1.1 500 Internal Server Error\r\n"
+#define H502 "HTTP/1.1 502 Bad Gateway\r\n"
+#define H503 "HTTP/1.1 503 Service Unavailable\r\n"
+#define H504 "HTTP/1.1 504 Gateway Timeout\r\n"
 
 typedef struct s_location
 {
@@ -70,6 +87,7 @@ typedef struct s_config
 class Server
 {
 	private:
+		std::map<std::string, std::string> http_error_map;
 		std::string location_key;
 		t_config cnf[MAX_VSERVER];
 		t_config conf;
@@ -123,6 +141,8 @@ class Server
 		void delete_methode(int comm_socket_fd);
 		void error_methode(int comm_socket_fd);
 		void concatPath(void);
-		void fillHeader(const char *path, char* body_size, int body_len);
+		void fillHeader(const char *first_field, const char *path, char* body_size, int body_len);
+		void sendErr(int comm_socket_fd, std::string code);
+		int get_fsize(char *request, int comm_socket_fd);
 };
 #endif

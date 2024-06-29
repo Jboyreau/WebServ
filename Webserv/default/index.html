@@ -144,8 +144,7 @@
                     fetch('/upload/' + file.name, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': file.type,
-                            'Content-Length': file.size
+                            'Content-Type': file.type
                         },
                         body: arrayBuffer
                     })

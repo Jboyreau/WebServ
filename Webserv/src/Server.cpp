@@ -17,6 +17,14 @@ Server::Server(void)
 	timeout.tv_sec = SELECT_TIMEOUT_SEC;
 	timeout.tv_usec = SELECT_TIMEOUT_USEC;
 	opt = 1;
+	http_error_map["403"] = H403;
+	http_error_map["404"] = H404;
+	http_error_map["411"] = H411;
+	http_error_map["413"] = H413;
+	http_error_map["500"] = H500;
+	http_error_map["502"] = H502;
+	http_error_map["503"] = H503;
+	http_error_map["504"] = H504;
 }
 
 Server::~Server(void)
@@ -330,7 +338,10 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 							get_methode(comm_socket_fd);
 						}
 						else
-							std::cout << RED << "GET not allowed\n";//send error method not allowed
+						{
+							std::cout << RED << "GET not allowed" << RESET << std::endl;//send error method not allowed
+							sendErr(comm_socket_fd, "403"); //error
+						}
 					}	
 					break;
 				case POST :
@@ -339,7 +350,10 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 						post_methode(header_end, comm_socket_fd, body_chunk_size);
 					}
 					else
-						std::cout << RED << "POST not allowed\n";//send error method not allowed
+					{
+						std::cout << RED << "POST not allowed" << RESET << std::endl;//send error method not allowed
+						sendErr(comm_socket_fd, "403"); //error
+					}
 					break;
 				case DELETE :
 					if (temp.method_map.find(methode_key) != temp.method_map.end())
@@ -347,12 +361,16 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 						delete_methode(comm_socket_fd);
 					}
 					else
-						std::cout << RED << "DELETE not allowed\n";//send error method not allowed
+					{
+						std::cout << RED << "DELETE not allowed" << std::endl;//send error method not allowed
+						sendErr(comm_socket_fd, "403"); //error
+					}
 					break;
 				default :
-					std::cout << RED << "NOOB not allowed\n";//send error method not handeled
+					std::cout << RED << "NOOB not allowed" << RESET << std::endl;//send error method not handeled
+					sendErr(comm_socket_fd, "503"); //error
 			}
-			std::cout << YELLOW << "\n####RESPONSE CONTENT####:\n" << response << RESET << std::endl;
+			std::cout << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
 			close(comm_socket_fd);
 			*(fds_buffer + i) = -1;
 			std::cout << GREEN << "Communication socket closed" << RESET << std::endl;
@@ -406,4 +424,15 @@ void Server::setNonBlocking(int socket)
         std::cerr << RED << "ERROR : fcntl F_GETFL" << RESET << std::endl;
     if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1)
         std::cerr << RED << "ERROR : fcntl F_SETFL" << RESET << std::endl;
+}
+
+void Server::sendErr(int comm_socket_fd, std::string code)
+{
+	char body_size[14];
+	struct stat st;
+
+	std::strcpy(path, conf.error_map[code].c_str());
+	stat(path, &st);
+	fillHeader(http_error_map[code].c_str(), path, body_size, st.st_size);
+	respond(path, comm_socket_fd, st.st_size);
 }

@@ -11,7 +11,7 @@
 #include "itoa.h" //itoa
 #include "get_post_delete.h" //enum extension
 
-int get_fsize(char *request, int comm_socket_fd)
+int Server::get_fsize(char *request, int comm_socket_fd)
 {
 	int len;
 	char *content_length_str = std::strstr(request, "Content-Length: ");
@@ -20,14 +20,14 @@ int get_fsize(char *request, int comm_socket_fd)
 	if (!content_length_str)
 	{
 		// Error: No Content-Length found
-		send(comm_socket_fd, error_message, std::strlen(error_message), 0);
+		sendErr(comm_socket_fd, "411");
 		return -1;
 	}
 	content_length_str += std::strlen("Content-Length: ");
 	len = atoi(content_length_str);
 	if (len > MAX_BODY_SIZE)
 	{
-		//gerer cette erreur plus tard sans oublier l'overflow.
+		sendErr(comm_socket_fd, "413");
 		return -1;
 	}
 	return len;
@@ -53,12 +53,12 @@ static int keygen(const char *ext)
 	return sum * *(ext + 1);
 }
 
-void Server::fillHeader(const char *path, char* body_size, int body_len)
+void Server::fillHeader(const char *first_field, const char *path, char* body_size, int body_len)
 {
 	const char *ext;
 	int key;
 
-	std::strcpy(response, "HTTP/1.1 200 OK\r\n");
+	std::strcpy(response, first_field);
 	std::strcat(response, "Server: My Personal HTTP Server\r\n");
 	std::strcat(response, "Content-Length: ");
 	itoa(body_len, body_size);
@@ -141,14 +141,14 @@ void Server::fillHeader(const char *path, char* body_size, int body_len)
 
 void Server::respond(const char *path, int client_socket_fd, int file_size)
 {
-	int response_len = strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, read_bytes, i;
+	int response_len = std::strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, read_bytes, i;
 
 	//Ouverture du fichier a envoyer:
 	file_to_send_fd = open(path, O_RDONLY);
 	if (file_to_send_fd < 0)
 	{
 		printf("Error: unable to open %s\n", path);
-		return;
+		return; //error
 	}
 	//Envoi du header
 	//Verification des valeurs de retour de send() pour eviter les infinites loop en cas de spam.
@@ -230,29 +230,30 @@ void Server::get_methode(int comm_socket_fd)
 		if (!autoIndexPage.empty())
 		{
 			std::strcat(path, ".html");
-			fillHeader(path, body_size, autoIndexPage.size());
+			fillHeader(OK, path, body_size, autoIndexPage.size());
 			send(comm_socket_fd, response, strlen(response), 0);
 			send(comm_socket_fd, autoIndexPage.c_str(), autoIndexPage.size(), 0);
 		}
 		else
-			;//error 404
+			sendErr(comm_socket_fd, "404");
 	}
 	else if (result == 0 && (st.st_mode & S_IFMT) == S_IFREG) //fichier existe
 	{
-		fillHeader(path, body_size, st.st_size);
+		fillHeader(OK, path, body_size, st.st_size);
 		respond(path, comm_socket_fd, st.st_size);
 	}
 	else if (stat(temp.index, &st) == 0) //index existe
 	{
-		fillHeader(temp.index, body_size, st.st_size);
+		fillHeader(OK, temp.index, body_size, st.st_size);
 		respond(temp.index, comm_socket_fd, st.st_size);
 	}
 	else //index was a lie.
-		;//error 404
+		sendErr(comm_socket_fd, "404");
 }
 
 void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_size)
 {
+	const char *success_message = "HTTP/1.1 200 OK\nContent-Length: 0\n\n";
 	int file_fd, file_size, recv_bytes, wrote_bytes, i, total_recv_bytes;
 	char body_size[14];
 	struct stat st;
@@ -299,23 +300,22 @@ printf("POST DEBUG file_size = %d\n", file_size);
 	}
 printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
     close(file_fd);
+	send(comm_socket_fd, success_message, strlen(success_message), 0);
 }
 
 void Server::delete_methode(int comm_socket_fd)
 {
 	char body_size[14], path[PATH_MAX];
-	const char *success_message = "HTTP/1.1 200 OK\nContent-Length: 0\n\n";
-    const char *error_message = "HTTP/1.1 404 Not Found\nContent-Length: 0\n\n";
 
 	concatPath();
 	if (remove(path) == 0)
 	{
 		// Fichier supprimé avec succès
-        send(comm_socket_fd, success_message, strlen(success_message), 0);
+		send(comm_socket_fd, OK, strlen(OK), 0);
 	}
 	else
 	{
 		// Échec de la suppression du fichier
-        ;//error 404
+        sendErr(comm_socket_fd, "404");//error 404
 	}
 }

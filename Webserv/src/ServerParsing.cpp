@@ -51,6 +51,15 @@ bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>:
 {
 	/*RULE : SERVER END rPort() rIp() rName() rError() rLocation() SERVER ou .end()*/
 	//Verification du nombre de token.
+
+	(*(cnf + server_index)).error_map["411"] = E411;
+	(*(cnf + server_index)).error_map["413"] = E413;
+	(*(cnf + server_index)).error_map["403"] = E403;
+	(*(cnf + server_index)).error_map["404"] = E404;
+	(*(cnf + server_index)).error_map["500"] = E500;
+	(*(cnf + server_index)).error_map["502"] = E502;
+	(*(cnf + server_index)).error_map["503"] = E503;
+	(*(cnf + server_index)).error_map["504"] = E504;
 	if (std::distance(it, token_liste.end()) >= 2)
 	{
 		if ((*it).type == SERVER && (*(it + 1)).type == END)
@@ -306,7 +315,7 @@ bool Server::ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::i
 							std::cerr << RESET << std::endl;
 						}
 					//Affectation de la taille à cnf.
-					if (((*(cnf + server_index)).max_body_size = atoi((*(it + 1)).str)) < MAX_BODY_SIZE)
+					if (((*(cnf + server_index)).max_body_size = atoi((*(it + 1)).str)) <= MAX_BODY_SIZE)
 					{
 						std::cout << GREEN << "\tMax_body_size " << (*(cnf + server_index)).max_body_size << RESET << std::endl;
 						//skip IP WORD END
