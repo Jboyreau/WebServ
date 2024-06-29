@@ -136,13 +136,14 @@ void Server::communicate(void)
 	}
 }
 
-bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location)
+bool Server::findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location)
 {
 	char current_path[PATH_MAX]; //pointe le debut.
 	int len = std::strlen(location_key);
 	std::strncpy(current_path, location_key, len);
 	current_path[len] = '\0';
 	char *current_path_end = current_path + len -1; //pointe la fin.
+	loc_len = 0;
 
 	while (current_path != current_path_end)
 	{
@@ -151,6 +152,7 @@ bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_l
 		{
 			location = location_map[current_path];
 			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
+			loc_len = std::strlen(current_path);
 			return true;
 		}
 		if (current_path_end != current_path && *current_path_end == '/')
@@ -165,6 +167,7 @@ bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_l
 		{
 			location = location_map[current_path];
 			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
+			loc_len = std::strlen(current_path);
 			return true;
 		}	
 	return false;

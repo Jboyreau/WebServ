@@ -35,11 +35,44 @@ int Server::get_fsize(char *request, int comm_socket_fd)
 
 void Server::concatPath(void)
 {
-	const char *ptr = location_key.c_str();
-	for(++ptr; *ptr != '/' && *ptr; ++ptr)
-		;
-	std::strcpy(path, temp.root);
-	std::strcat(path, ptr);
+	const char *ptr;
+	int i;
+	if (*temp.ret == 0)
+	{
+		ptr = location_key.c_str();
+		if (*ptr)
+			ptr = location_key.c_str() + 1;
+		for (i = 0; *(ptr + i) != '/' && *(ptr + i); ++i)
+			;	
+		if (*(ptr + i) == '/')
+			ptr = ptr + i + 1;
+		std::strcpy(path, temp.root);
+		std::strcat(path, ptr);
+	}
+	else
+	{
+		ptr = temp.ret;
+		if (*ptr)
+			ptr = temp.ret + 1;
+		for(i = 0; *(ptr + i) != '/' && *(ptr + i); ++i)
+			;
+		if (*(ptr + i) == '/')
+			ptr = ptr + i + 1;
+		std::strcpy(path, temp.root);
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+		std::strcat(path, ptr);
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+		ptr = location_key.c_str();
+	std::cout << YELLOW << "pre loop ptr = " << ptr << RESET << std::endl;
+	std::cout << YELLOW << "Location len =" << loc_len << RESET << std::endl;
+		for (i = 0; i < loc_len; ++i)
+			;
+	ptr = ptr + i;
+	std::cout << YELLOW << " post loop ptr + i = " << *(ptr + i) << RESET << std::endl;
+	std::cout << YELLOW << " post loop ptr = " << ptr << RESET << std::endl;
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+		std::strcat(path, ptr);
+	}
 	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 }
 

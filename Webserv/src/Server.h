@@ -107,6 +107,7 @@ class Server
 		unsigned int addr_len;
 		int server_index;
 		int comm_socket_fd;
+		int loc_len;
 	public:
 		Server(void);
 		~Server(void);
@@ -144,5 +145,6 @@ class Server
 		void fillHeader(const char *first_field, const char *path, char* body_size, int body_len);
 		void sendErr(int comm_socket_fd, std::string code);
 		int get_fsize(char *request, int comm_socket_fd);
+		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
 };
 #endif

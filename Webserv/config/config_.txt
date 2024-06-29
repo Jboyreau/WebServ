@@ -29,11 +29,11 @@ server
 		root ./upload/
 	location /old-page/
 		allow_methods GET
-		root ./old-page/
+		root ./new-page/
 		autoindex on
 		index ./default/index.html
 		cgi_path ./cgi/php-cgi
-		return ./new-page/
+		return /new-page/
 server
 	listen 2000
 	host 127.0.0.1
@@ -65,8 +65,8 @@ server
 		root ./upload/
 	location /old-page/
 		allow_methods GET
-		root ./old-page/
-		return ./new-page/
+		root ./new-page/
+		return /new-page/
 server
 	listen 2004
 	host 127.0.0.4
