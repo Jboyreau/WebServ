@@ -1,0 +1,1807 @@
+################################################File: ./src/get_post_delete.cpp
+#include <string.h> //memeset(); strcpy; strcat();
+#include <limits.h> //PATH_MAX
+#include <stdlib.h> //
+#include <stdio.h> //
+#include <unistd.h> //read(); write();
+#include <fcntl.h> ///open()
+#include <sys/types.h> //send();
+#include <sys/socket.h> //send();
+#include <sys/stat.h> //stat()
+#include "Server.h"
+#include "itoa.h" //itoa
+#include "get_post_delete.h" //enum extension
+
+#define DEFAULT_PATH "./default/default.html"
+#define POST_PATH "./media/gif/upload.gif"
+
+int get_fsize(char *request, int comm_socket_fd)
+{
+	int len;
+	char *content_length_str = std::strstr(request, "Content-Length: ");
+	const char *error_message = "HTTP/1.1 411 Length Required\n\n";
+
+	if (!content_length_str)
+	{
+		// Error: No Content-Length found
+		send(comm_socket_fd, error_message, strlen(error_message), 0);
+		return -1;
+	}
+	content_length_str += strlen("Content-Length: ");
+	len = atoi(content_length_str);
+	if (len > MAX_BODY_SIZE)
+	{
+		//gerer cette erreur plus tard sans oublier l'overflow.
+		return -1;
+	}
+	return len;
+}
+
+void Server::concatPath(void)
+{
+	const char *ptr = location_key.c_str();
+	for(++ptr; *ptr != '/' && *ptr; ++ptr)
+		;
+	std::strcpy(path, temp.root);
+	std::strcat(path, ptr);
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+}
+
+static int keygen(const char *ext)
+{
+	int sum = 0;
+	int i;
+
+	for (i = 1; *(ext + i); ++i)
+		sum += *(ext + i);
+	return sum * *(ext + 1);
+}
+
+void Server::fillHeader(const char *path, char* body_size, int body_len)
+{
+	const char *ext;
+	int key;
+
+	std::strcpy(response, "HTTP/1.1 200 OK\r\n");
+	std::strcat(response, "Server: My Personal HTTP Server\r\n");
+	std::strcat(response, "Content-Length: ");
+	itoa(body_len, body_size);
+	std::strcat(response, body_size);
+	std::strcat(response, "\r\n");
+	std::strcat(response, "Connection: close\r\n"); 
+	// Déterminer le type de contenu en fonction de l'extension du fichier.	
+	ext = strrchr(path, '.');
+	if (ext != NULL)
+	{
+		key = keygen(ext);
+		printf("*DEBUG! EXT = %s\r\n", ext);
+		switch (key)
+		{
+			case HTML_KEY:
+				std::strcat(response, "Content-Type: text/html; charset=UTF-8\r\n");
+				break;
+			case HTM_KEY:
+				std::strcat(response, "Content-Type: text/html; charset=UTF-8\r\n");
+				break;
+			case CSS_KEY:
+				std::strcat(response, "Content-Type: text/css\r\n");
+				break;
+			case JS_KEY:
+				std::strcat(response, "Content-Type: application/javascript\r\n");
+				break;
+			case JSON_KEY:
+				std::strcat(response, "Content-Type: application/json\r\n");
+				break;
+			case XML_KEY:
+				std::strcat(response, "Content-Type: application/xml\r\n");
+				break;
+			case TXT_KEY:
+				std::strcat(response, "Content-Type: text/plain\r\n");
+				break;
+			case JPEG_KEY:
+				std::strcat(response, "Content-Type: image/jpeg\r\n");
+				break;
+			case JPG_KEY:
+				std::strcat(response, "Content-Type: image/jpeg\r\n");
+				break;
+			case PNG_KEY:
+				std::strcat(response, "Content-Type: image/png\r\n");
+				break;
+			case GIF_KEY:
+				std::strcat(response, "Content-Type: image/gif\r\n");
+				break;
+			case SVG_KEY:
+				std::strcat(response, "Content-Type: image/svg+xml\r\n");	
+				break;
+			case ICO_KEY:
+				std::strcat(response, "Content-Type: image/x-icon\r\n");	
+				break;
+			case PDF_KEY:
+				std::strcat(response, "Content-Type: application/pdf\r\n");	
+				break;
+			case ZIP_KEY:
+				std::strcat(response, "Content-Type: application/zip\r\n");	
+				break;
+			case MP4_KEY:
+				std::strcat(response, "Content-Type: video/mp4\r\n");
+				break;
+			case WEBM_KEY:
+				std::strcat(response, "Content-Type: video/webm\r\n");
+				break;
+			case MP3_KEY:
+				std::strcat(response, "Content-Type: audio/mpeg\r\n");
+				break;
+			case WAV_KEY:
+				std::strcat(response, "Content-Type: audio/wav\r\n");
+				break;
+			default: //extension inconnue. 
+				std::strcat(response, "Content-Type: application/octet-stream\r\n"); //Le client telecharge le fichier.
+		}
+	}
+	else //pas d'extension.
+		std::strcat(response, "Content-Type: application/octet-stream\r\n"); //Le client telecharge le fichier.
+	std::strcat(response, "\r\n");
+}
+
+void Server::respond(const char *path, int client_socket_fd, int file_size)
+{
+	int response_len = strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, read_bytes, i;
+
+	//Ouverture du fichier a envoyer:
+	file_to_send_fd = open(path, O_RDONLY);
+	if (file_to_send_fd < 0)
+	{
+		printf("Error: unable to open %s\n", path);
+		return;
+	}
+	//Envoi du header
+	//Verification des valeurs de retour de send() pour eviter les infinites loop en cas de spam.
+	total_sent_bytes = 0;
+	sent_bytes = 1;
+	while (total_sent_bytes < response_len && sent_bytes > 0)
+	{
+		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0); //Envoie du chunk.
+		total_sent_bytes += sent_bytes;
+	}
+	//Envoi du fichier
+printf("RESPOND DEBUG: file_size = %d\n", file_size);
+	read_bytes = 0;
+	total_sent_bytes = 0;
+	i = 0;
+	while (total_sent_bytes < file_size && i < TIMEOUT)
+	{
+		read_bytes = read(file_to_send_fd, body + total_sent_bytes, file_size); //Chargement du chunk dans le buffer.
+		total_sent_bytes += read_bytes * (read_bytes > 0);
+		++i;
+	}
+printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
+	i = 0;
+	sent_bytes = 0;
+	total_sent_bytes = 0;
+	while (total_sent_bytes < file_size && i < TIMEOUT)
+	{
+		sent_bytes = send(client_socket_fd, body + total_sent_bytes, file_size, 0); //Envoie du chunk.
+		total_sent_bytes += sent_bytes * (sent_bytes > 0);
+		++i;
+	}
+printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
+	close(file_to_send_fd);
+}
+void Server::get_methode(int comm_socket_fd)
+{
+	char body_size[14];
+	struct stat st;
+/*1.Parsing du file path*/
+	concatPath();
+	if (stat(path, &st) == 0 && strcmp(path, "./") && (st.st_mode & S_IFMT) == S_IFREG) //path existe &&  path != "./" && le fichier est regulier.
+	{
+/*2.Remplir le header puis L'envoyer avec le body*/
+		fillHeader(path, body_size, st.st_size);
+		respond(path, comm_socket_fd, st.st_size);
+		return;
+	}
+	if (stat(DEFAULT_PATH, &st) == 0)
+	{
+/*2ALT. pareil que l'etape 2 avec un path par default*/
+		fillHeader(DEFAULT_PATH, body_size, st.st_size);
+		respond(DEFAULT_PATH, comm_socket_fd, st.st_size);
+		return;
+	}
+	send(comm_socket_fd, "", 0, 0);
+}
+
+void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_size)
+{
+	int file_fd, file_size, recv_bytes, wrote_bytes, i, total_recv_bytes;
+	char body_size[14];
+	struct stat st;
+
+	//Trouver le chemin du fichier.
+	concatPath();
+	//Trouver la taille du fichier.
+	file_size = get_fsize(request, comm_socket_fd);
+	if (file_size < 0)
+		return ;
+	file_fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (file_fd < 0)
+    {
+        printf("Error : unable to create %s\n", path);
+        return;
+    }
+	//Recevoir le fichier.
+//printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
+	//Ecrire le morceau de body en trop.
+	//TODO::turn into loop.
+	if (body_chunk_size > 0)
+	{
+		recv_bytes = write(file_fd, header_end, body_chunk_size);
+		file_size -= recv_bytes;
+	}
+	total_recv_bytes = 0;
+	i = 0;
+printf("POST DEBUG file_size = %d\n", file_size);
+	//Chargement du buffer avec recv.
+    while (total_recv_bytes < file_size && i < TIMEOUT)
+    {
+       recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
+		total_recv_bytes += recv_bytes * (recv_bytes > 0);
+		++i;
+    }
+	//Ecriture du buffer content avec write()
+	total_recv_bytes = 0;
+	i = 0;
+	while (total_recv_bytes < file_size && i < TIMEOUT)
+	{
+		wrote_bytes = write(file_fd, body + total_recv_bytes, file_size);
+        total_recv_bytes += wrote_bytes * (wrote_bytes > 0);
+		++i;
+	}
+printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
+    close(file_fd);
+}
+
+void Server::delete_methode(int comm_socket_fd)
+{
+	char body_size[14], path[PATH_MAX];
+	const char *success_message = "HTTP/1.1 200 OK\nContent-Length: 0\n\n";
+    const char *error_message = "HTTP/1.1 404 Not Found\nContent-Length: 0\n\n";
+
+	concatPath();
+	if (remove(path) == 0)
+	{
+		// Fichier supprimé avec succès
+        send(comm_socket_fd, success_message, strlen(success_message), 0);
+	}
+	else
+	{
+		// Échec de la suppression du fichier
+        send(comm_socket_fd, error_message, strlen(error_message), 0);
+	}
+}
+
+################################################File: ./src/itoa.cpp
+void itoa(long long int value, char* buffer)
+{
+	char* ptr = buffer;
+	char* ptr1 = buffer;
+	char tmp_char;
+	long long int tmp_value;
+
+	if (value < 0) {
+		value = -value;
+		*ptr++ = '-';
+	}
+	do
+	{
+		tmp_value = value;
+		value /= 10;
+		*ptr++ = "0123456789"[tmp_value - value * 10];
+	}
+	while (value);
+	*ptr-- = '\0';
+	if (buffer[0] == '-')
+		ptr1++;
+	while (ptr1 < ptr)
+	{
+		tmp_char = *ptr;
+		*ptr-- = *ptr1;
+		*ptr1++ = tmp_char;
+	}
+}
+
+################################################File: ./src/itoa.h
+#ifndef ITOA_H
+#define ITOA_H
+void itoa(long long int value, char* buffer);
+#endif
+
+################################################File: ./src/Server.h
+#ifndef SERVER_H
+#define SERVER_H
+
+#include <iostream>
+#include <vector>
+#include <map>
+#include <algorithm>
+
+#include <unistd.h> //read(); write();
+#include <stdlib.h> //
+#include <stdio.h> //
+#include <sys/time.h> //struct timeval
+#include <signal.h> //signal();
+#include <sys/select.h> //type fd_set;
+#include <sys/types.h> //send();
+#include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR; inet_ntoa(); send();
+#include <netinet/in.h> //IPPROTO_TCP;
+#include <arpa/inet.h>	//ntohs();
+#include <string.h> //memset(); strcpy; strcat();
+#include <netdb.h>
+#include <memory.h>
+#include <errno.h>
+#include <fcntl.h> //fcntl
+#include <limits.h> //PATH_MAX
+#include <sys/types.h> //send();
+#include <sys/socket.h> //send();
+#include <sys/stat.h> //stat()
+#include <stdint.h> //unint32_t
+#include "ServerUtils.h"
+
+#define TIMEOUT 10000000
+#define SELECT_TIMEOUT_SEC 0
+#define SELECT_TIMEOUT_USEC 0
+#define HTTP_HEADER_SIZE 16384
+#define MAX_VSERVER 5
+#define MAX_CLIENT 10
+#define REQUEST_QUEUE_LEN 100
+#define MAX_BODY_SIZE 1000000000 //byte
+#define MAX_SERVER_NAME_LEN 253
+#define CNF_PATH "./config/config.txt"
+#define DEFAULT_INDEX_PATH "./default/default.html"
+#define DEFAULT_CGI_PATH "./cgi/php-cgi"
+#define DEFAULT_ROOT "./"
+#define RED "\033[1;31m" //Error
+#define YELLOW "\033[1;33m" //Debug
+#define GREEN "\033[1;32m" //Info
+#define RESET "\033[0m"
+
+typedef struct s_location
+{
+	std::map<std::string, bool> method_map;
+	char root[PATH_MAX];
+	bool autoindex;
+	char index[PATH_MAX];
+	char cgi_path[PATH_MAX];
+	char ret[PATH_MAX];
+} t_location;
+
+typedef struct s_config
+{
+	struct sockaddr_in server_addr;
+	std::map<std::string, int> name_map;
+	std::map<std::string, std::string> error_map;
+	size_t max_body_size;
+	std::map<std::string, t_location> location_map;	
+} t_config;
+
+class Server
+{
+	private:
+		std::string location_key;
+		t_config cnf[MAX_VSERVER];
+		t_config conf;
+		t_location temp;
+		char response[HTTP_HEADER_SIZE];
+		char request[HTTP_HEADER_SIZE];
+		char path[PATH_MAX];
+		int *virtual_servers[MAX_VSERVER];
+		struct sockaddr_in client_addr;
+		struct timeval timeout;
+		fd_set readfds;
+		fd_set writefds;
+		fd_set exceptfds;
+		char *body;
+		int opt;
+		size_t cnf_len;
+		unsigned int addr_len;
+		int server_index;
+		int comm_socket_fd;
+	public:
+		Server(void);
+		~Server(void);
+		bool parsing(void);
+		bool ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool rulePort(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleIp(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleName(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleMethode(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleRoot(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleAutoIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleReturn(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		void run(void);
+		void setup(void);
+		void communicate(void);
+		void acceptServe(int *fds_buffer, int master_sock_tcp_fd);
+		int getMaxFd(int* fds_buffer);
+		void setNonBlocking(int socket);
+		bool canAccessDirectory(const char *path);
+		bool canAccessFile(const char *path, int flag);
+		//TEMP
+		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
+		void respond(const char *path, int client_socket_fd, int file_size);
+		void get_methode(int comm_socket_fd);
+		void delete_methode(int comm_socket_fd);
+		void error_methode(int comm_socket_fd);
+		void concatPath(void);
+		void fillHeader(const char *path, char* body_size, int body_len);
+};
+#endif
+
+################################################File: ./src/ServerParsing.cpp
+#include "Server.h"
+
+bool Server::parsing(void)
+{
+	int line = 1;
+	bool parsing_result = false;
+	char *file_content;
+	std::vector<t_token> token_liste;
+	std::vector<t_token>::iterator it;
+
+	file_content = loadFileToBuffer(CNF_PATH);
+	token_liste = tokenizer(file_content);
+//Appel de ruleServer() pour traiter plusieurs blocs.
+	it = token_liste.begin();
+	server_index = 0;
+	while (server_index < MAX_VSERVER)
+	{
+		if (it != token_liste.end())
+		{
+			if ((*it).type == SERVER)
+			{
+				(*(cnf + server_index)).max_body_size = MAX_BODY_SIZE;
+				std::cout << GREEN << "\nVIRTUAL SERVER " << server_index << " CONFIGURATION : " << std::endl;
+				parsing_result = ruleServer(token_liste, it, line);
+			}
+			else
+				break;
+		}
+		else
+			break;
+		if (parsing_result == false)
+			break;
+		++server_index;
+	}
+	if (server_index > MAX_VSERVER)
+	{
+		parsing_result = false;
+		std::cerr << RED << "Error Config : more than " << MAX_VSERVER << '.' << RESET << std::endl;
+	}
+	cnf_len = server_index;
+	delete[] file_content;
+	return parsing_result;
+}
+
+/*
+Conventions du parsing:
+	Les mots en maj tels que SERVER designent des tokens (voir ServerUtils.h->enum token_type).
+	Les fonctions commencants par rule sont des regles.
+*/
+bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : SERVER END rPort() rIp() rName() rError() rLocation() SERVER ou .end()*/
+	//Verification du nombre de token.
+	if (std::distance(it, token_liste.end()) >= 2)
+	{
+		if ((*it).type == SERVER && (*(it + 1)).type == END)
+		{
+			//skip SERVER et END.
+			it += 2;
+			//increment de line.
+			++line;
+			//Appel des regles rPort() rIp() rName() rError() rLocation().
+			if (rulePort(token_liste, it, line) == false)
+				return configErr(it, line);
+			if (ruleIp(token_liste, it, line) == false)
+				return configErr(it, line);
+			if (ruleName(token_liste, it, line) == false)
+				return configErr(it, line);
+			if (ruleError(token_liste, it, line) == false)
+				return configErr(it, line);
+			if (ruleSize(token_liste, it, line) == false)
+				return configErr(it, line);
+			if (ruleLocation(token_liste, it, line) == false)
+				return configErr(it, line);
+			//Test du token de fin de bloc, SERVER ou fin de vecteur.
+			if (it == token_liste.end())
+				return true;
+			if ((*it).type == SERVER)
+				return true;
+			return printf("yo\n"),configErr(it, line);
+		}
+		return configErr(it, line);
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::rulePort(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : listen word \n*/
+	int port = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == PORT)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation du port a la strut s_config.
+					if (is_valid_port_number(it + 1, port) == true)
+					{
+						(*(cnf + server_index)).server_addr.sin_port = port;
+						std::cout << GREEN << "\tPort : " << ntohs((*(cnf + server_index)).server_addr.sin_port) << RESET << std::endl;
+						//skip PORT WORD END.
+						it += 3;
+						//increment de line.
+						++line;
+						return true;
+					}
+					std::cerr << RED << "Error Config : line " << line << ' ';
+					std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+					std::cerr << " is not a port number.";
+					std::cerr << RESET << std::endl;
+					return false;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		return configErr(it, line);
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::ruleIp(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : host word \n*/
+	u_int32_t ip = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == IP)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation du port a la strut s_config.
+					if ((ip = ftInetAddr(it + 1)) != INADDR_NONE)
+					{
+						(*(cnf + server_index)).server_addr.sin_addr.s_addr = ip;
+						std::cout << GREEN << "\tIpv4 : " << ntohl((*(cnf + server_index)).server_addr.sin_addr.s_addr) << RESET << std::endl;
+						(*(cnf + server_index)).server_addr.sin_family = AF_INET;
+						std::cout << GREEN << "\tFamily : " << (*(cnf + server_index)).server_addr.sin_family << RESET << std::endl;
+						//skip IP WORD END
+						it += 3;
+						//increment de line.
+						++line;
+						return true;
+					}
+					std::cerr << RED << "Error Config : line " << line << ' ';
+					std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+					std::cerr << " is not an ip address.";
+					std::cerr << RESET << std::endl;
+					return false;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		return configErr(it, line);
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::ruleName(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : NAME rName_() | z*/
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 1)
+	{
+		if ((*it).type == NAME)
+		{
+			//skip NAME.
+			++it;
+			return ruleName_(token_liste, it, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == END)
+			return configErr(it, line);
+	}
+	//Regle facultaive, si (distance >= 1 || token != WORD || token != PORT || token != IP || token != END), alors true.
+	return true;
+}
+
+bool Server::ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE: WORD END | word NAME_*/
+
+	//Verification du nombre de token.
+	if (std::distance(it, token_liste.end()) >= 2)
+	{
+		if ((*(it)).type == WORD)
+		{
+			if ((*(it + 1)).type == END)
+			{
+				//Ajout de server name dans un vecteur de char.
+				std::string name((*it).str, (*it).len);
+				(*(cnf + server_index)).name_map[name] = server_index;
+				std::cout << GREEN << "\tName Key: " << name << RESET << std::endl;
+				std::cout << GREEN << "\tName map Content : " << (*(cnf + server_index)).name_map[name] << RESET << std::endl;
+				//skip WORD END.
+				it += 2;
+				//increment de line;
+				++line;
+				return true;
+			}
+			else if ((*(it + 1)).type == WORD)
+			{
+				//Ajout de server name dans un vecteur de char.
+				std::string name((*it).str, (*it).len);
+				(*(cnf + server_index)).name_map[name] = server_index;
+				std::cout << GREEN << "\tName Key: " << name << RESET << std::endl;
+				std::cout << GREEN << "\tName map Content : " << (*(cnf + server_index)).name_map[name] << RESET << std::endl;
+				//skip WORD.
+				++it;
+				//Recursion.
+				return ruleName_(token_liste, it, line);
+			}
+			return configErr(it, line);
+		}
+		return configErr(it, line);
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	static int error_count = 0;
+    const int max_errors = 100;
+	/*RULE: ERROR WORD WORD END rError() | z*/
+	if (std::distance(it, token_liste.end()) >= 4)
+	{
+		if ((*it).type == ERR)
+		{
+			if (++error_count > max_errors)
+			{
+				std::cerr << RED << "Error Config : line " << line << "near " << ' ';
+				std::cerr.write((*it).str, (*it).len);
+				std::cerr << ", more than " << max_errors << " defined.";
+				std::cerr << RESET << std::endl;
+				return false;
+			}
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == WORD)
+				{
+					if ((*(it + 3)).type == END)
+					{
+						std::string error_code((*(it + 1)).str, (*(it + 1)).len);
+						std::string error_path((*(it + 2)).str, (*(it + 2)).len);
+						// Ajout du code d'erreur et de l'URI à la map d'erreurs
+						(*(cnf + server_index)).error_map[error_code] = error_path;
+						std::cout << GREEN << "\tHTTP Error map Key: " << error_code << RESET << std::endl;
+						std::cout << GREEN << "\tHTTP Error map Content : " << (*(cnf + server_index)).error_map[error_code] << RESET << std::endl;
+						//skip ERR WORD WORD END.
+						it += 4;
+						//increment de line.
+						++line;
+						return ruleError(token_liste, it, line);
+					}
+					return configErr(it + 3, line);
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == NAME || (*it).type == END)
+			return configErr(it, line);
+	}
+	//Regle facultaive, si (distance >= 1 || token != WORD || token != PORT || token != IP || token != NAME || token != END), alors true.
+	return true;
+}
+
+bool Server::ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : SIZE WORD END*/
+	size_t size = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == SIZE)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					for (int i = 0; i < (*(it + 1)).len; ++i)
+						if (!std::isdigit(*((*(it + 1)).str + i)))
+						{
+							std::cerr << RED << "Error Config : line " << line << ' ';
+							std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+							std::cerr << " is not a digit.";
+							std::cerr << RESET << std::endl;
+						}
+					//Affectation de la taille à cnf.
+					if (((*(cnf + server_index)).max_body_size = atoi((*(it + 1)).str)) < MAX_BODY_SIZE)
+					{
+						std::cout << GREEN << "\tMax_body_size " << (*(cnf + server_index)).max_body_size << RESET << std::endl;
+						//skip IP WORD END
+						it += 3;
+						//increment de line.
+						++line;
+						return true;
+					}
+					std::cerr << RED << "Error Config : line " << line << ' ';
+					std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+					std::cerr << " is too big.";
+					std::cerr << RESET << std::endl;
+					return false;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == NAME || (*it).type == ERR || (*it).type == END)
+			return configErr(it, line);
+	}
+	return true;
+}
+
+bool Server::ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : LOC WORD END rMeth() rRoot() rAutoIndex() rIndex() rCgiPath() rReturn() rLocation() | z*/
+	//Clear de la sructure temp.
+	temp.method_map.clear();
+	std::strcpy(temp.root, DEFAULT_ROOT);
+	temp.autoindex = false;
+	std::strcpy(temp.index, DEFAULT_INDEX_PATH);
+	std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);	
+	memset(temp.ret, 0, PATH_MAX);
+	//Verification du nombre de token.
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == LOC && (*(it + 1)).type == WORD && (*(it + 2)).type == END)
+		{
+			std::string location_key((*(it + 1)).str, (*(it + 1)).len);
+			//skip SERVER et END.
+			it += 3;
+			//increment de line.
+			++line;
+			//Appel des regles rMeth() rRoot() rAutoIndex() rIndex() rCgiPath() rReturn().
+			if (ruleMethode(token_liste, it, line) == false)
+				return false;
+			if (ruleRoot(token_liste, it, line) == false)
+				return false;
+			if (ruleAutoIndex(token_liste, it, line) == false)
+				return false;
+			if (ruleIndex(token_liste, it, line) == false)
+				return false;
+			if (ruleCgiPath(token_liste, it, line) == false)
+				return false;
+			if (ruleReturn(token_liste, it, line) == false)
+				return false;
+			//Affectation de temp a location map.
+			(*(cnf + server_index)).location_map[location_key] = temp;
+			std::cout << GREEN << "\tLocationPath : " << location_key << RESET << std::endl;
+			if ((*(cnf + server_index)).location_map[location_key].method_map.find("GET") != (*(cnf + server_index)).location_map[location_key].method_map.end())
+        		std::cout << GREEN << "\t\t\"GET\" " << (*(cnf + server_index)).location_map[location_key].method_map["GET"] << RESET << std::endl;
+			if ((*(cnf + server_index)).location_map[location_key].method_map.find("POST") != (*(cnf + server_index)).location_map[location_key].method_map.end())
+        		std::cout << GREEN << "\t\t\"POST\" " << (*(cnf + server_index)).location_map[location_key].method_map["POST"] << RESET << std::endl;
+			if ((*(cnf + server_index)).location_map[location_key].method_map.find("DELETE") != (*(cnf + server_index)).location_map[location_key].method_map.end())
+        		std::cout << GREEN << "\t\t\"DELETE\" " << (*(cnf + server_index)).location_map[location_key].method_map["DELETE"] << RESET << std::endl;
+			std::cout << GREEN << "\t\tROOT : " << (*(cnf + server_index)).location_map[location_key].root << RESET << std::endl;
+			std::cout << GREEN << "\t\tAUTOINDEX : " << (*(cnf + server_index)).location_map[location_key].autoindex << RESET << std::endl;
+			std::cout << GREEN << "\t\tINDEX : " << (*(cnf + server_index)).location_map[location_key].index << RESET << std::endl;
+			std::cout << GREEN << "\t\tCGIPATH : " << (*(cnf + server_index)).location_map[location_key].cgi_path << RESET << std::endl;
+			std::cout << GREEN << "\t\tRETURN : " << (*(cnf + server_index)).location_map[location_key].ret << RESET << std::endl;
+			//Recursion
+			return ruleLocation(token_liste, it, line);
+			//Test du token de fin de bloc, SERVER ou fin de vecteur.
+		}
+	}
+	//Regle facultaive.
+	return true;
+}
+
+bool Server::ruleMethode(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : METH rMeth_()*/
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 1)
+	{
+		if ((*it).type == METH)
+		{
+			//skip METH.
+			++it;
+			return ruleMethode_(token_liste, it, line);
+		}
+		return configErr(it, line);
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{	
+	/*RULE: WORD END | word rMeth_*/
+
+	//Verification du nombre de token.
+	if (std::distance(it, token_liste.end()) >= 2)
+	{
+		if ((*(it)).type == WORD)
+		{
+			if ((*(it + 1)).type == END)
+			{
+				//Ajout des METHODES dans la map methode map.
+				std::string key((*it).str, (*it).len);
+				if (key != "GET" && key != "POST" && key != "DELETE")
+					return configErr(it, line);
+				temp.method_map[key] = true;
+				//skip WORD END.
+				it += 2;
+				//increment de line;
+				++line;
+				return true;
+			}
+			else if ((*(it + 1)).type == WORD)
+			{
+				//Ajout de server name dans un vecteur de char.
+				std::string key((*it).str, (*it).len);
+				temp.method_map[key] = true;
+				//skip WORD.
+				++it;
+				//Recursion.
+				return ruleMethode_(token_liste, it, line);
+			}
+			return configErr(it, line);
+		}
+		return configErr(it, line);
+	}
+	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+bool Server::ruleRoot(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : ROOT WORD END | z*/
+	int i = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == ROOT)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation de la racine.
+					memset(temp.root, 0, PATH_MAX);
+					for (i = 0; i < (*(it + 1)).len && i < PATH_MAX; ++i)
+						*(temp.root + i) = *((*(it + 1)).str + i);
+					if (i == PATH_MAX)
+					{
+						std::cerr << RED << "Error Config : line " << line << ' ';
+						std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+						std::cerr << " is longer than PATH_MAX.";
+						std::cerr << RESET << std::endl;
+						return false;
+					}
+					if (canAccessDirectory(temp.root) == false)
+					{
+						std::cerr << RED << "Error Config : line " << line << ' ';
+                        std::cerr << "Cannot open directory: " << temp.root << RESET << std::endl;
+                        return false;
+					}
+					//skip ROOT WORD END
+					it += 3;
+					//increment de line.
+					++line;
+					return true;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == NAME || (*it).type == ERR || (*it).type == END
+		|| (*it).type == METH)
+			return configErr(it, line);
+	}
+	return true;
+}
+
+bool Server::ruleAutoIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+/*RULE : AUTOINDEX WORD END | z*/
+	int i = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == AUTOINDEX)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					std::string state((*(it + 1)).str, (*(it +1)).len);
+					//Affectation de l'autoindex.
+					if (state == "on")
+					{
+						temp.autoindex = true;
+					}
+					else if (state == "off")
+					{
+						temp.autoindex = false;
+					}
+					else
+					{	
+						std::cerr << RED << "Error Config : line " << line << ' ';
+						std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+						std::cerr << " should be set to \"on\" or \"off\".";
+						std::cerr << RESET << std::endl;
+						return false;	
+					}
+					//skip IP WORD END
+					it += 3;
+					//increment de line.
+					++line;
+					return true;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == NAME || (*it).type == ERR || (*it).type == END
+		|| (*it).type == METH || (*it).type == ROOT)
+			return configErr(it, line);
+	}
+	return true;
+}
+
+bool Server::ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{	
+	/*RULE : INDEX WORD END | z*/
+	int i = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == INDEX)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation de la racine.
+					memset(temp.index, 0, PATH_MAX);
+					for (i = 0; i < (*(it + 1)).len && i < PATH_MAX; ++i)
+						*(temp.index + i) = *((*(it + 1)).str + i);
+					if (i == PATH_MAX)
+					{
+						std::cerr << RED << "Error Config : line " << line << ' ';
+						std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+						std::cerr << " is longer than PATH_MAX.";
+						std::cerr << RESET << std::endl;
+						return false;
+					}	
+					if (canAccessFile(temp.index, R_OK) == false)
+					{
+						std::cerr << RED << "Error Config : line " << line << ' ';
+                        std::cerr << "Cannot open directory: " << temp.root << RESET << std::endl;
+                        return false;
+					}
+					//skip IP WORD END
+					it += 3;
+					//increment de line.
+					++line;
+					return true;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == NAME || (*it).type == ERR || (*it).type == END
+		|| (*it).type == METH || (*it).type == ROOT || (*it).type == AUTOINDEX)
+			return configErr(it, line);
+	}
+	return true;
+}
+
+bool Server::ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : CGIPATH WORD END | z*/
+	int i = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == CGIPATH)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation de la racine.
+					memset(temp.cgi_path, 0, PATH_MAX);
+					for (i = 0; i < (*(it + 1)).len && i < PATH_MAX; ++i)
+						*(temp.cgi_path + i) = *((*(it + 1)).str + i);
+					if (i == PATH_MAX)
+					{
+						std::cerr << RED << "Error Config : line " << line << ' ';
+						std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+						std::cerr << " is longer than PATH_MAX.";
+						std::cerr << RESET << std::endl;
+						return false;
+					}
+					if (canAccessFile(temp.cgi_path, X_OK) == false)
+					{
+						std::cerr << RED << "Error Config : line " << line << ' ';
+                        std::cerr << "Cannot open directory: " << temp.root << RESET << std::endl;
+                        return false;
+					}
+					//skip CGI WORD END
+					it += 3;
+					//increment de line.
+					++line;
+					return true;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == NAME || (*it).type == ERR || (*it).type == END
+		|| (*it).type == METH || (*it).type == ROOT || (*it).type == AUTOINDEX || (*it).type == INDEX)
+			return configErr(it, line);
+	}
+	return true;
+}
+
+bool Server::ruleReturn(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line)
+{
+	/*RULE : RETURN WORD END | z*/
+	int i = 0;
+
+	//Verification du nombre de token.	
+	if (std::distance(it, token_liste.end()) >= 3)
+	{
+		if ((*it).type == RETURN)
+		{
+			if ((*(it + 1)).type == WORD)
+			{
+				if ((*(it + 2)).type == END)
+				{
+					//Affectation de la racine.
+					for (i = 0; i < (*(it + 1)).len && i < PATH_MAX; ++i)
+						*(temp.ret + i) = *((*(it + 1)).str + i);
+					if (i == PATH_MAX)
+					{
+						std::cerr << RED << "Error Config : line " << line << ' ';
+						std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
+						std::cerr << " is longer than PATH_MAX.";
+						std::cerr << RESET << std::endl;
+						return false;
+					}
+					//skip RETURN WORD END
+					it += 3;
+					//increment de line.
+					++line;
+					return true;
+				}
+				return configErr(it + 2, line);
+			}
+			return configErr(it + 1, line);
+		}
+		else if ((*it).type == WORD || (*it).type == PORT || (*it).type == IP || (*it).type == NAME || (*it).type == ERR || (*it).type == END
+		|| (*it).type == METH || (*it).type == ROOT || (*it).type == AUTOINDEX || (*it).type == INDEX || (*it).type == CGIPATH)
+			return configErr(it, line);
+	}
+	return true;
+}
+
+################################################File: ./src/ServerUtils.h
+#ifndef SERVERUTILS_H
+#define SERVERUTILS_H
+
+
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <cctype> //ispace
+#include <cstring> // pour strncmp
+#include <ctype.h> //isdigit
+#include <stdlib.h>
+#include <netinet/in.h> //IPPROTO_TCP
+
+#define RED "\033[1;31m" //Error
+#define YELLOW "\033[1;33m" //Debug
+#define GREEN "\033[1;32m" //Info
+#define RESET "\033[0m"
+#define NL "$"
+
+enum token_type
+{
+	SERVER,
+	PORT,
+	IP,
+	NAME,
+	ERR,
+	SIZE,
+	LOC,
+	METH,
+	ROOT,
+	AUTOINDEX,
+	INDEX,
+	CGIPATH,
+	RETURN,
+	WORD,
+	END,
+};
+
+typedef struct s_token
+{
+	const char *str;
+	size_t len;
+	int	type;
+}t_token;
+
+uint32_t ftInetAddr(const std::vector<t_token>::iterator &it);
+char* loadFileToBuffer(const char* filename);
+std::vector<t_token> tokenizer(char *buffer);
+bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port);
+bool configErr(const std::vector<t_token>::iterator &it, int linT);
+#endif
+
+################################################File: ./src/Server.cpp
+#include "Server.h"
+#include "get_post_delete.h"
+
+Server::Server(void)
+{
+	if (parsing() == false)
+		exit(EXIT_FAILURE);
+	for (int i = 0; i < MAX_VSERVER; ++i)
+		virtual_servers[i] = NULL;
+	if ((body = new char [MAX_BODY_SIZE]) == NULL)
+	{
+		std::cerr << RED << "Error : Unable to allocate Body." << RESET << std::endl;
+		exit(EXIT_FAILURE);
+	}
+	memset(body, 0, MAX_BODY_SIZE);
+	addr_len = sizeof(struct sockaddr);
+	timeout.tv_sec = SELECT_TIMEOUT_SEC;
+	timeout.tv_usec = SELECT_TIMEOUT_USEC;
+	opt = 1;
+}
+
+Server::~Server(void)
+{
+	if (body)
+		delete[] body;
+	for (server_index = 0; server_index < MAX_VSERVER; ++server_index)
+		if (virtual_servers[server_index])
+			delete[] virtual_servers[server_index];
+}
+
+void Server::run(void)
+{
+	setup();
+	communicate();
+}
+
+void Server::setup(void)
+{
+	int *virtual_server = NULL;
+
+	for (server_index = 0; server_index < cnf_len; ++server_index)
+	{
+		//Determiner si un autre server bloc partage le meme port.
+		for(int k = 0; k < server_index; ++k)
+			if (cnf[server_index].server_addr.sin_port == cnf[k].server_addr.sin_port)
+			{
+				if ((virtual_servers[server_index] = new int [MAX_CLIENT + 2]) == NULL)
+				{
+					std::cerr << RED << "Error : Unable to allocate server " << server_index << '.' << RESET << std::endl;
+					exit(EXIT_FAILURE);
+				}
+				*(virtual_servers[server_index]) =  *(virtual_servers[k]);//dupliquer le master socket.
+				virtual_server = virtual_servers[server_index];
+				int l;
+				for (l = 1; l < MAX_CLIENT + 1; ++l)
+					virtual_server[l] = -1;
+				*(virtual_servers[server_index] + l) = 1; //la dernierre case permet de determiner si un master socket a ete duplique.
+				*(virtual_servers[k] + l) = 1; //la dernierre case permet de determiner si un master socket a ete duplique.
+				break;
+			}
+		if (virtual_servers[server_index] != NULL)
+			continue;
+		if ((virtual_servers[server_index] = new int [MAX_CLIENT + 2]) == NULL)
+		{
+			std::cerr << RED << "Error : Unable to allocate server " << server_index << '.' << RESET << std::endl;
+			exit(EXIT_FAILURE);
+		}
+		virtual_server = virtual_servers[server_index];
+		if ((virtual_server[0] = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
+		{
+			std::cerr << RED << "Error : Unable to create socket for server " << server_index << '.' << RESET << std::endl;
+			exit(EXIT_FAILURE);
+		}
+		if (setsockopt(virtual_server[0], SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) < 0)
+		{
+			std::cerr << RED << "Error : TCP socket creation failed for server " << server_index << '.' << RESET << std::endl;
+			exit(EXIT_FAILURE);
+		}
+		if (bind(virtual_server[0], (struct sockaddr *)&(cnf[server_index].server_addr), sizeof(struct sockaddr)) == -1)
+		{
+			std::cerr << RED << "Error : Socket bind failed for server " << server_index << '.' << RESET << std::endl;
+			exit(EXIT_FAILURE);
+		}
+		if (listen(virtual_server[0], REQUEST_QUEUE_LEN) < 0)
+		{
+			std::cerr << RED << "Error : Listen failed for server " << server_index << '.' << RESET << std::endl;
+			exit(EXIT_FAILURE);
+		}
+		int j;
+		for (j = 1; j < MAX_CLIENT + 1; ++j)
+			virtual_server[j] = -1;
+		virtual_server[j] = 0; //la dernierre case permet de determiner si un server a ete duplique.
+	}
+}
+
+void Server::communicate(void)
+{
+	int *virtual_server, j;
+
+	//Empeche le server de crash lorsqu'un SIGPIPE est recu.
+	signal(SIGPIPE, SIG_IGN);
+	while (1)
+	{
+		//Parcours de chaque server virtuel.
+		for (server_index = 0; server_index < cnf_len; ++server_index)
+		{
+			virtual_server = virtual_servers[server_index];
+			//Reset des fd_sets.
+			FD_ZERO(&readfds);
+			FD_ZERO(&writefds);
+			FD_ZERO(&exceptfds);
+			//Ajout des fd different de -1 dans les fd_sets.
+			for (int j = 0; j < MAX_CLIENT + 1; ++j)
+			{
+				if (virtual_server[j] != -1)
+				{
+					FD_SET(virtual_server[j], &readfds);
+					FD_SET(virtual_server[j], &writefds);
+					FD_SET(virtual_server[j], &exceptfds);
+				}
+			}
+			//Activation des sockets ajoutes dans les fd_sets.
+			select(getMaxFd(virtual_server) + 1, &readfds, &writefds, &exceptfds, &timeout);
+			//Le server communique avec le client suivant sa config.
+			conf = cnf[server_index];
+			acceptServe(virtual_server,*virtual_server);
+		}
+	}
+}
+
+bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location)
+{
+	char current_path[PATH_MAX]; //pointe le debut.
+	int len = std::strlen(location_key);
+	std::strncpy(current_path, location_key, len);
+	current_path[len] = '\0';
+	char *current_path_end = current_path + len -1; //pointe la fin.
+
+	while (current_path != current_path_end)
+	{
+		std::cout << YELLOW << "DEBUG : loop current_path = " << current_path << RESET << std::endl;
+		if (location_map.find(current_path) != location_map.end())
+		{
+			location = location_map[current_path];
+			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
+			return true;
+		}
+		if (current_path_end != current_path && *current_path_end == '/')
+			--current_path_end;
+		while (current_path_end != current_path && *current_path_end != '/')
+			--current_path_end;
+		if (*current_path_end == '/')
+			*(current_path_end + 1) = 0;
+	}
+	if (*current_path == '/' && current_path == current_path_end)
+		if (location_map.find(current_path) != location_map.end())
+		{
+			location = location_map[current_path];
+			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
+			return true;
+		}	
+	return false;
+}
+
+void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
+{
+	int i;
+
+	/*Accepter la demande de connection*/
+	if (FD_ISSET(master_sock_tcp_fd, &readfds))
+	{
+		//accept() renvoie un nouveau fd temporaire permettant d'identifier le client.
+		if ((comm_socket_fd = accept(master_sock_tcp_fd, (struct sockaddr *)&client_addr, &addr_len)) < 0)
+		{
+			std::cerr << RED << "Error : accept error : " << errno << RESET << std::endl;
+			return ;
+		}
+		std::cout << GREEN << "Connection accepted from client : " << comm_socket_fd << RESET << std::endl;
+		/*
+		   fds_buffer est mis a jours avec comm_socket_fd,
+		   chaque virtual_server (virtual_servers[i])
+		   partage le meme index qu'un t_config (cnf[i]).
+		   Chaque client stocke dans un virtual_server,
+		   est donc lie a une congiguration.
+		   On a donc la relaton suivante:
+		   cnf[i] --> virtual_servers[i] --> comm_socket_fd.
+		 */
+		for (i = 1; i < MAX_CLIENT; ++i)
+			if (*(fds_buffer + i) == -1)
+			{
+				*(fds_buffer + i) = comm_socket_fd;
+				break ;
+			}
+		if (i != MAX_CLIENT)
+			return ;
+		close(comm_socket_fd);
+	}
+	/*Communication avec les clients*/
+	for (int i = 1; i < MAX_CLIENT + 1; ++i)
+	{
+		if (FD_ISSET(*(fds_buffer + i), &exceptfds))
+		{
+			std::cerr << RED << "Error : Exception on client  " << *(fds_buffer + i) << RESET << std::endl;
+			close(*(fds_buffer + i));
+			*(fds_buffer + i) = -1;
+		}
+		else if (FD_ISSET(*(fds_buffer + i), &readfds))
+		{
+			comm_socket_fd = *(fds_buffer + i);
+			setNonBlocking(comm_socket_fd);
+			//Lire du header de la request.
+			int total_recv_bytes = 0;
+			int recv_bytes = 0;
+			char *header_end = NULL;
+			int time_cout = 0;
+			while (total_recv_bytes < HTTP_HEADER_SIZE && header_end == NULL && time_cout < TIMEOUT)
+			{
+				recv_bytes = recv(comm_socket_fd, request + total_recv_bytes, HTTP_HEADER_SIZE, 0);
+				header_end = std::strstr(request, "\r\n\r\n");
+				total_recv_bytes += recv_bytes * (recv_bytes > 0);
+				++time_cout;
+			}
+			//Trouver la bonne config suivant le nom.	
+			char *ptr = NULL;
+			if (*(virtual_servers[server_index] + MAX_CLIENT + 1) == 1)
+			{
+				std::cout << YELLOW << "DEUBUG DUPLICATE" << RESET << std::endl;
+				if ((ptr = std::strstr(request, "Host")) != NULL)
+				{
+					int name_len = 0;
+					for (ptr += 6; *(ptr + name_len) != ':'; ++name_len)
+						;
+					std::string name(ptr, name_len);
+					std::cout << YELLOW << "DEBUG : NAME = " << name << RESET << std::endl;
+					int j;
+					for (j = 0; j < cnf_len; ++j)
+						if (*(virtual_servers[j]) == master_sock_tcp_fd && cnf[j].name_map.find(name) != cnf[j].name_map.end())
+						{
+							conf = cnf[cnf[j].name_map[name]];
+							break;
+						}
+					for (j = 0; j < cnf_len; ++j)
+						if (*(virtual_servers[j]) == master_sock_tcp_fd)
+						{
+							conf = cnf[cnf[j].name_map[name]];
+							break;
+						}
+					std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;
+				}
+			}
+			//Initialiser le pointeur de fin du header et la taille du body chunk.
+			header_end += 4;
+			int body_chunk_size = total_recv_bytes - (header_end - request);
+			std::cout << GREEN << "Recvd bytes = " << total_recv_bytes << " from client " << comm_socket_fd << RESET << std::endl;
+			std::cout << YELLOW << "\n####REQUEST CONTENT####:\n" << request << RESET << std::endl;
+			if (total_recv_bytes == 0 || recv_bytes < 0)
+			{
+				std::cout << GREEN << "Communication ended by EMPTY MESSAGE with Client" << comm_socket_fd << RESET << std::endl;
+				close(comm_socket_fd);
+				*(fds_buffer + i) = -1;
+				break;
+			}
+			//Trouver le path.
+			int loc_len = 0;
+			int j;
+			for (j = 0; *(request + j) != ' ' && j < HTTP_HEADER_SIZE; ++j)
+				;
+			ptr = request + (++j);
+			for (; *(request + j) != ' ' && j < HTTP_HEADER_SIZE; ++j)
+				++loc_len;
+			std::string lk(ptr, loc_len);
+			location_key = lk;
+			//Trouver la bonne location.
+			if (conf.location_map.size() != 0)
+			{
+				std::cout << GREEN << "LocationKey : " << location_key << RESET << std::endl;
+				if (findLongestMatchingPath(location_key.c_str(), conf.location_map, temp))
+				{
+					std::cout << GREEN << "LocationPath_ : " << location_key << RESET << std::endl;
+				}
+				else
+				{
+					temp.method_map["GET"] = true;
+					temp.method_map["POST"] = true;
+					std::strcpy(temp.root, DEFAULT_ROOT);
+					temp.autoindex = false;
+					std::strcpy(temp.index, DEFAULT_INDEX_PATH);
+					std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);
+					memset(temp.ret, 0, PATH_MAX);
+					std::cout << GREEN << "LocationPath0 : " << "default" << RESET << std::endl;
+				}
+			}
+			else
+			{
+				temp.method_map["GET"] = true;
+				temp.method_map["POST"] = true;
+				std::strcpy(temp.root, DEFAULT_ROOT);
+				temp.autoindex = false;
+				std::strcpy(temp.index, DEFAULT_INDEX_PATH);
+				std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);
+				memset(temp.ret, 0, PATH_MAX);
+				std::cout << GREEN << "LocationPath1 : " << "default" << RESET << std::endl;
+			}
+			//Afficher location params.
+			std::cout << GREEN << "\tLocation : "<< RESET << std::endl;
+			if (temp.method_map.find("GET") != temp.method_map.end())
+				std::cout << GREEN << "\t\t\"GET\" " << temp.method_map["GET"] << RESET << std::endl;
+			if (temp.method_map.find("POST") != temp.method_map.end())
+				std::cout << GREEN << "\t\t\"POST\" " << temp.method_map["POST"] << RESET << std::endl;
+			if (temp.method_map.find("DELETE") != temp.method_map.end())
+				std::cout << GREEN << "\t\t\"DELETE\" " << temp.method_map["DELETE"] << RESET << std::endl;
+			std::cout << GREEN << "\t\tROOT : " << temp.root << RESET << std::endl;
+			std::cout << GREEN << "\t\tAUTOINDEX : " << temp.autoindex << RESET << std::endl;
+			std::cout << GREEN << "\t\tINDEX : " << temp.index << RESET << std::endl;
+			std::cout << GREEN << "\t\tCGIPATH : " << temp.cgi_path << RESET << std::endl;
+			std::cout << GREEN << "\t\tRETURN : " << temp.ret << RESET << std::endl;
+			//servir le client.
+			int methode_len;
+			for (methode_len = 0; *(request + methode_len) != ' ' && methode_len < HTTP_HEADER_SIZE; ++methode_len)
+				;
+			std::string methode_key(request, methode_len);
+			std::cout << RED << "Methode key :" << methode_key << RESET <<std::endl;
+			switch (*request + *(request + 1))
+			{
+				case GET :
+					if (FD_ISSET(comm_socket_fd, &writefds))
+					{
+						if (temp.method_map.find(methode_key) != temp.method_map.end())
+						{
+							get_methode(comm_socket_fd);
+						}
+						else
+							std::cout << RED << "GET not allowed\n";//send error method not allowed
+					}	
+					break;
+				case POST :
+					if (temp.method_map.find(methode_key) != temp.method_map.end())
+					{
+						post_methode(header_end, comm_socket_fd, body_chunk_size);
+					}
+					else
+						std::cout << RED << "POST not allowed\n";//send error method not allowed
+					break;
+				case DELETE :
+					if (temp.method_map.find(methode_key) != temp.method_map.end())
+					{
+						delete_methode(comm_socket_fd);
+					}
+					else
+						std::cout << RED << "DELETE not allowed\n";//send error method not allowed
+					break;
+				default :
+					std::cout << RED << "NOOB not allowed\n";//send error method not handeled
+			}
+			std::cout << YELLOW << "\n####RESPONSE CONTENT####:\n" << response << RESET << std::endl;
+			close(comm_socket_fd);
+			*(fds_buffer + i) = -1;
+			std::cout << GREEN << "Communication socket closed" << RESET << std::endl;
+		}
+	}
+}
+
+bool Server::canAccessDirectory(const char *path)
+{
+	struct stat info;
+	if (stat(path, &info) != 0)
+	{
+		return false; // Impossible de récupérer les informations du dossier
+	}
+	else if (info.st_mode & S_IFDIR)
+	{
+		return (access(path, X_OK) == 0); // Vérifier l'accès en lecture
+	}
+	return false; // Ce n'est pas un dossier
+}
+
+bool Server::canAccessFile(const char *path, int flag)
+{
+	struct stat info;
+	if (stat(path, &info) != 0)
+	{
+		return false; // Impossible de récupérer les informations du fichier
+	}
+	else if (info.st_mode & S_IFREG) 
+	{
+		return (access(path, flag) == 0); // Vérifier l'accès en lecture
+	}
+	return false; // Ce n'est pas un fichier régulier
+}
+
+int Server::getMaxFd(int* fds_buffer)
+{
+	int max = -1;
+
+	for(int i = 0; i < MAX_CLIENT; ++i)
+		if (max < *(fds_buffer + i))
+			max = *(fds_buffer + i);
+	return max;
+}
+
+void Server::setNonBlocking(int socket)
+{
+    int flags = fcntl(socket, F_GETFL, 0);
+    
+    if (flags == -1)
+        std::cerr << RED << "ERROR : fcntl F_GETFL" << RESET << std::endl;
+    if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1)
+        std::cerr << RED << "ERROR : fcntl F_SETFL" << RESET << std::endl;
+}
+
+################################################File: ./src/ServerUtils.cpp
+#include "ServerUtils.h"
+
+char* loadFileToBuffer(const char* filename)
+{
+	char *buffer;
+	std::ifstream file(filename, std::ios::binary | std::ios::ate); //Ouvrir en mode binaire et placer le curseur à la fin
+	if (!file)
+	{
+		std::cerr << RED << "Error : Ubnable to open the configuration file." << RESET << std::endl;
+		exit(EXIT_FAILURE);
+	}
+	std::streamsize size = file.tellg(); //Obtenir la taille du fichier
+	file.seekg(0, std::ios::beg); //Revenir au début du fichier
+	buffer = new char[size + 1]; //Allouer le buffer avec un octet supplémentaire pour le caractère nul
+	if (file.read(buffer, size)) //Lire le fichier dans le buffer
+	{
+		buffer[size] = '\0'; //Ajouter le caractère nul à la fin du buffer
+		return buffer;
+	}
+	delete[] buffer;
+	std::cerr << RED << "Error : Configuration read failed." << RESET << std::endl;
+	exit(EXIT_FAILURE);
+}
+
+bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port)
+{
+	for (size_t i = 0; i < (*it).len; ++i)
+		if (!std::isdigit(*((*it).str + i)))
+			return false;
+	// Convertir la chaîne en entier
+	port = std::atoi((*it).str);
+	// Vérifier si le numéro de port est dans la plage valide (1 à 65535)
+	if (port < 1 || port > 65535)
+		return false;
+	port = htons(port);
+	return true;
+}
+
+uint32_t ftInetAddr(const std::vector<t_token>::iterator &it)
+{
+	const char *ip_address = (*it).str;
+	unsigned long int result = 0;
+	int byte, i;
+
+	for (i = 0; *(ip_address + i) != '\n' && *(ip_address + i); ++i)
+		if (!isdigit(*(ip_address + i)) && *(ip_address + i) != '.')
+			return INADDR_NONE;
+	for (i = 1; *ip_address != '\n' && *ip_address; ++i)
+	{
+		byte = atoi(ip_address);
+		if (byte < 0 || byte > 255)
+			return INADDR_NONE;
+		result += (byte << ((4 - i) * 8));
+		while(*ip_address != '.' && *ip_address != '\n' && *ip_address)
+			++ip_address;
+		if (*ip_address == '.')
+			++ip_address;
+	}
+	return htonl(result);
+}
+
+t_token findType(char *buffer, int *index)
+{
+	t_token token;
+	int len = 0;
+
+	while (*(buffer + len) && *(buffer + len) != '\n' && !std::isspace(static_cast<unsigned char>(*(buffer + len))))
+		++len;
+	(*index) += len;
+	token.str = buffer;
+	token.len = len;
+	if (strncmp(buffer, "server", len) == 0)
+	{
+		token.type = SERVER;
+	}
+	else if (strncmp(buffer, "listen", len) == 0)
+	{
+		token.type = PORT;
+	}
+	else if (strncmp(buffer, "host", len) == 0)
+	{
+		token.type = IP;
+	}
+	else if (strncmp(buffer, "server_name", len) == 0)
+	{
+		token.type = NAME;
+	}
+	else if (strncmp(buffer, "error_page", len) == 0)
+	{
+		token.type = ERR;
+	}
+	else if (strncmp(buffer, "client_max_body_size", len) == 0)
+	{
+		token.type = SIZE;
+	}
+	else if (strncmp(buffer, "location", len) == 0)
+	{
+		token.type = LOC;
+	}
+	else if (strncmp(buffer, "allow_methods", len) == 0)
+	{
+		token.type = METH;
+	}
+	else if (strncmp(buffer, "root", len) == 0)
+	{
+		token.type = ROOT;
+	}
+	else if (strncmp(buffer, "autoindex", len) == 0)
+	{
+		token.type = AUTOINDEX;
+	}
+	else if (strncmp(buffer, "index", len) == 0)
+	{
+		token.type = INDEX;
+	}
+	else if (strncmp(buffer, "cgi_path", len) == 0)
+	{
+		token.type = CGIPATH;
+	}
+	else if (strncmp(buffer, "return", len) == 0)
+	{
+		token.type = RETURN;
+	}
+	else
+		token.type = WORD;
+	return token;
+}
+
+std::vector<t_token> tokenizer(char *buffer)
+{
+	int i = 0;
+
+	std::vector<t_token> token_liste;
+	t_token token;
+
+	while (*(buffer + i))
+	{
+		if (*(buffer + i) == '\n' || std::isspace(static_cast<unsigned char>(*(buffer + i))))
+		{
+			if (*(buffer + i) == '\n')
+			{
+				token.str = NL;
+				token.len = 1;
+				token.type = END;
+				token_liste.push_back(token);
+			}
+			++i;
+		}
+		else if (*(buffer + i))
+		{
+			token = findType(buffer + i, &i);
+			token_liste.push_back(token);
+		}
+	}
+	return token_liste;
+}
+
+bool configErr(const std::vector<t_token>::iterator &it, int line)
+{
+	std::cerr << RED << "Error Config : line " << line << " near ";
+	std::cerr.write((*it).str, (*it).len);
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+################################################File: ./src/get_post_delete.h
+#ifndef GETPOSTDELETE_H
+#define GETPOSTDELETE_H
+typedef enum {
+    HTML_KEY = 45448,
+    HTM_KEY = 34216,
+    CSS_KEY = 32571,
+    JS_KEY = 23426,
+    JSON_KEY = 46852,
+    XML_KEY = 40440,
+    TXT_KEY = 40832,
+    JPG_KEY = 34026,
+    JPEG_KEY = 44732,
+    PNG_KEY = 36400,
+    GIF_KEY = 31930,
+    SVG_KEY = 38640,
+    ICO_KEY = 33075,
+    PDF_KEY = 35168,
+    ZIP_KEY = 41358,
+    MP4_KEY = 29757,
+    WEBM_KEY = 50813,
+    MP3_KEY = 29648,
+    WAV_KEY = 39746
+} FileExtensionKey;
+
+typedef enum {
+    GET = 'G' + 'E',
+	POST = 'P' + 'O',
+	DELETE = 'D' + 'E',
+} MethodType;
+
+#endif
+
+################################################File: ./src/main.cpp
+#include "Server.h"
+
+int main(void)
+{
+	Server server;
+	server.run();
+	return EXIT_SUCCESS;
+}
+
+

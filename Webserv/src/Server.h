@@ -17,6 +17,7 @@
 #include <netinet/in.h> //IPPROTO_TCP;
 #include <arpa/inet.h>	//ntohs();
 #include <string.h> //memset(); strcpy; strcat();
+#include <sstream>
 #include <netdb.h>
 #include <memory.h>
 #include <errno.h>
@@ -26,6 +27,7 @@
 #include <sys/socket.h> //send();
 #include <sys/stat.h> //stat()
 #include <stdint.h> //unint32_t
+#include <dirent.h> // opendir, readdir, closedir
 #include "ServerUtils.h"
 
 #define TIMEOUT 10000000
@@ -68,11 +70,13 @@ typedef struct s_config
 class Server
 {
 	private:
+		std::string location_key;
 		t_config cnf[MAX_VSERVER];
 		t_config conf;
 		t_location temp;
 		char response[HTTP_HEADER_SIZE];
 		char request[HTTP_HEADER_SIZE];
+		char path[PATH_MAX];
 		int *virtual_servers[MAX_VSERVER];
 		struct sockaddr_in client_addr;
 		struct timeval timeout;
@@ -118,5 +122,7 @@ class Server
 		void get_methode(int comm_socket_fd);
 		void delete_methode(int comm_socket_fd);
 		void error_methode(int comm_socket_fd);
+		void concatPath(void);
+		void fillHeader(const char *path, char* body_size, int body_len);
 };
 #endif

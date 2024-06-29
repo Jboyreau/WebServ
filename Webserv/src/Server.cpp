@@ -216,7 +216,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			while (total_recv_bytes < HTTP_HEADER_SIZE && header_end == NULL && time_cout < TIMEOUT)
 			{
 				recv_bytes = recv(comm_socket_fd, request + total_recv_bytes, HTTP_HEADER_SIZE, 0);
-				header_end = strstr(request, "\r\n\r\n");
+				header_end = std::strstr(request, "\r\n\r\n");
 				total_recv_bytes += recv_bytes * (recv_bytes > 0);
 				++time_cout;
 			}
@@ -225,7 +225,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			if (*(virtual_servers[server_index] + MAX_CLIENT + 1) == 1)
 			{
 				std::cout << YELLOW << "DEUBUG DUPLICATE" << RESET << std::endl;
-				if ((ptr = strstr(request, "Host")) != NULL)
+				if ((ptr = std::strstr(request, "Host")) != NULL)
 				{
 					int name_len = 0;
 					for (ptr += 6; *(ptr + name_len) != ':'; ++name_len)
@@ -260,17 +260,19 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				*(fds_buffer + i) = -1;
 				break;
 			}
+			//Trouver le path.
+			int loc_len = 0;
+			int j;
+			for (j = 0; *(request + j) != ' ' && j < HTTP_HEADER_SIZE; ++j)
+				;
+			ptr = request + (++j);
+			for (; *(request + j) != ' ' && j < HTTP_HEADER_SIZE; ++j)
+				++loc_len;
+			std::string lk(ptr, loc_len);
+			location_key = lk;
 			//Trouver la bonne location.
 			if (conf.location_map.size() != 0)
 			{
-				int loc_len = 0;
-				int j;
-				for (j = 0; *(request + j) != ' ' && j < HTTP_HEADER_SIZE; ++j)
-					;
-				ptr = request + (++j);
-				for (; *(request + j) != ' ' && j < HTTP_HEADER_SIZE; ++j)
-					++loc_len;
-				std::string location_key(ptr, loc_len);
 				std::cout << GREEN << "LocationKey : " << location_key << RESET << std::endl;
 				if (findLongestMatchingPath(location_key.c_str(), conf.location_map, temp))
 				{
