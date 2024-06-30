@@ -56,6 +56,7 @@
 #define E503 "./error/503.html"
 #define E504 "./error/504.html"
 #define OK "HTTP/1.1 200 OK\r\n"
+#define H301 "HTTP/1.1 301 Moved Permanently\r\n"
 #define H411 "HTTP/1.1 411 Length Required\r\n"
 #define H413 "HTTP/1.1 413 Payload Too Large\r\n"
 #define H404 "HTTP/1.1 404 Not Found\r\n"
@@ -141,7 +142,7 @@ class Server
 		void get_methode(int comm_socket_fd);
 		void delete_methode(int comm_socket_fd);
 		void error_methode(int comm_socket_fd);
-		void concatPath(void);
+		const char* concatPath(void);
 		void fillHeader(const char *first_field, const char *path, char* body_size, int body_len);
 		void sendErr(int comm_socket_fd, std::string code);
 		int get_fsize(char *request, int comm_socket_fd);
