@@ -109,6 +109,7 @@ class Server
 		int server_index;
 		int comm_socket_fd;
 		int loc_len;
+		int opened_file;
 	public:
 		Server(void);
 		~Server(void);
@@ -148,4 +149,7 @@ class Server
 		int get_fsize(char *request, int comm_socket_fd);
 		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
 };
+
+extern Server* serverInstance; // Pointeur global
+
 #endif

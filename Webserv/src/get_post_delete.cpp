@@ -24,7 +24,7 @@ int Server::get_fsize(char *request, int comm_socket_fd)
 	}
 	content_length_str += 16;
 	len = atoi(content_length_str);
-	if (len > MAX_BODY_SIZE)
+	if (len > conf.max_body_size)
 	{
 		sendErr(comm_socket_fd, "413");
 		return -1;
@@ -47,6 +47,7 @@ const char *Server::concatPath(void)
 			ptr = ptr + i + 1;
 		std::strcpy(path, temp.root);
 		std::strcat(path, ptr);
+		std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 		return OK;
 	}
 	ptr = temp.ret;
@@ -70,8 +71,8 @@ const char *Server::concatPath(void)
 	std::cout << YELLOW << " post loop ptr = " << ptr << RESET << std::endl;
 	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 	std::strcat(path, ptr);
-	return H301;
 	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+	return H301;
 }
 
 static int keygen(const char *ext)
@@ -172,11 +173,11 @@ void Server::fillHeader(const char *first_field, const char *path, char* body_si
 
 void Server::respond(const char *path, int client_socket_fd, int file_size)
 {
-	int response_len = std::strlen(response), file_to_send_fd, total_sent_bytes, total_read_bytes, sent_bytes, read_bytes, i, j;
+	int response_len = std::strlen(response), total_sent_bytes, total_read_bytes, sent_bytes, read_bytes, i, j;
 
 	//Ouverture du fichier a envoyer:
-	file_to_send_fd = open(path, O_RDONLY);
-	if (file_to_send_fd < 0)
+	opened_file = open(path, O_RDONLY);
+	if (opened_file < 0)
 	{
 		printf("Error: unable to open %s\n", path);
         sendErr(comm_socket_fd, "500");
@@ -201,7 +202,7 @@ printf("RESPOND DEBUG: file_size = %d\n", file_size);
 	while (total_read_bytes < file_size && i < TIMEOUT)
 	{
 		//Chargement du chunk dans le buffer.
-		read_bytes = read(file_to_send_fd, body + total_read_bytes, file_size);
+		read_bytes = read(opened_file, body + total_read_bytes, file_size);
 		j = 0;
 		total_sent_bytes = 0;
 		while (total_sent_bytes < read_bytes && j < TIMEOUT)
@@ -214,7 +215,8 @@ printf("RESPOND DEBUG: file_size = %d\n", file_size);
 		++i;
 	}
 printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
-	close(file_to_send_fd);
+	close(opened_file);
+	opened_file = -1;
 }
 
 std::string generateAutoIndex(const std::string &path)
@@ -266,9 +268,21 @@ void Server::get_methode(int comm_socket_fd)
 		{
 			std::strcat(path, ".html");
 			fillHeader(msg, path, body_size, autoIndexPage.size());
-			//TODO::LOOP
-			send(comm_socket_fd, response, std::strlen(response), 0);
-			send(comm_socket_fd, autoIndexPage.c_str(), autoIndexPage.size(), 0);
+			int len = std::strlen(response), sent_bytes;
+			int i = 0;
+			int total_sent_bytes; 
+			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
+			{
+				sent_bytes = send(comm_socket_fd, response, len, 0);
+				++i;
+			}
+			len = autoIndexPage.size();
+			i = 0;
+			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
+			{
+				sent_bytes = send(comm_socket_fd, autoIndexPage.c_str(), autoIndexPage.size(), 0);
+				++i;
+			}
 		}
 		else
         	sendErr(comm_socket_fd, "500");
@@ -300,8 +314,8 @@ void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_s
 	file_size = get_fsize(request, comm_socket_fd);
 	if (file_size < 0)
 		return ;
-	file_fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (file_fd < 0)
+	opened_file = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (opened_file < 0)
     {
         printf("Error : unable to create %s\n", path);
         return;
@@ -311,7 +325,7 @@ printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
 	//Ecrire le morceau de body en trop.
 	if (body_chunk_size > 0)
 	{
-		recv_bytes = write(file_fd, header_end, body_chunk_size);
+		recv_bytes = write(opened_file, header_end, body_chunk_size);
 		if (recv_bytes < 1)
 		{
 			sendErr(comm_socket_fd, "500");
@@ -331,7 +345,7 @@ printf("POST DEBUG file_size = %d\n", file_size);
 		total_wrote_bytes = 0;
 		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
 		{
-			wrote_bytes = write(file_fd, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
+			wrote_bytes = write(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
 			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
 			++j;
 		}
@@ -344,7 +358,8 @@ printf("POST DEBUG file_size = %d\n", file_size);
 		return;
 	}
 printf("POST DEBUG total_wrote_bytes = %d\n", total_wrote_bytes);
-    close(file_fd);
+    close(opened_file);
+	opened_file = -1;
 	send(comm_socket_fd, msg, strlen(msg), 0);
 }
 

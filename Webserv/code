@@ -25,7 +25,7 @@ int Server::get_fsize(char *request, int comm_socket_fd)
 	}
 	content_length_str += 16;
 	len = atoi(content_length_str);
-	if (len > MAX_BODY_SIZE)
+	if (len > conf.max_body_size)
 	{
 		sendErr(comm_socket_fd, "413");
 		return -1;
@@ -71,7 +71,7 @@ const char *Server::concatPath(void)
 	std::cout << YELLOW << " post loop ptr = " << ptr << RESET << std::endl;
 	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 	std::strcat(path, ptr);
-	return "301";
+	return H301;
 	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 }
 
@@ -173,47 +173,50 @@ void Server::fillHeader(const char *first_field, const char *path, char* body_si
 
 void Server::respond(const char *path, int client_socket_fd, int file_size)
 {
-	int response_len = std::strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, read_bytes, i;
+	int response_len = std::strlen(response), total_sent_bytes, total_read_bytes, sent_bytes, read_bytes, i, j;
 
 	//Ouverture du fichier a envoyer:
-	file_to_send_fd = open(path, O_RDONLY);
-	if (file_to_send_fd < 0)
+	opened_file = open(path, O_RDONLY);
+	if (opened_file < 0)
 	{
 		printf("Error: unable to open %s\n", path);
+        sendErr(comm_socket_fd, "500");
 		return; //error
 	}
-	//Envoi du header
-	//Verification des valeurs de retour de send() pour eviter les infinites loop en cas de spam.
+	//Envoi du header.
 	total_sent_bytes = 0;
 	sent_bytes = 1;
-	while (total_sent_bytes < response_len && sent_bytes > 0)
+	i = 0;
+	while (total_sent_bytes < response_len && i < TIMEOUT)
 	{
-		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0); //Envoie du chunk.
+		 //Envoie du chunk.
+		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0);
 		total_sent_bytes += sent_bytes;
+		++i;
 	}
 	//Envoi du fichier
 printf("RESPOND DEBUG: file_size = %d\n", file_size);
 	read_bytes = 0;
-	total_sent_bytes = 0;
+	total_read_bytes = 0;
 	i = 0;
-	while (total_sent_bytes < file_size && i < TIMEOUT)
+	while (total_read_bytes < file_size && i < TIMEOUT)
 	{
-		read_bytes = read(file_to_send_fd, body + total_sent_bytes, file_size); //Chargement du chunk dans le buffer.
-		total_sent_bytes += read_bytes * (read_bytes > 0);
-		++i;
-	}
-printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
-	i = 0;
-	sent_bytes = 0;
-	total_sent_bytes = 0;
-	while (total_sent_bytes < file_size && i < TIMEOUT)
-	{
-		sent_bytes = send(client_socket_fd, body + total_sent_bytes, file_size, 0); //Envoie du chunk.
-		total_sent_bytes += sent_bytes * (sent_bytes > 0);
+		//Chargement du chunk dans le buffer.
+		read_bytes = read(opened_file, body + total_read_bytes, file_size);
+		j = 0;
+		total_sent_bytes = 0;
+		while (total_sent_bytes < read_bytes && j < TIMEOUT)
+		{
+			sent_bytes = send(client_socket_fd, body + total_read_bytes + total_sent_bytes, file_size, 0); //Envoie du chunk.
+			total_sent_bytes += sent_bytes * (sent_bytes > 0);
+			++j;
+		}
+		total_read_bytes += read_bytes * (read_bytes > 0);
 		++i;
 	}
 printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
-	close(file_to_send_fd);
+	close(opened_file);
+	opened_file = -1;
 }
 
 std::string generateAutoIndex(const std::string &path)
@@ -265,11 +268,24 @@ void Server::get_methode(int comm_socket_fd)
 		{
 			std::strcat(path, ".html");
 			fillHeader(msg, path, body_size, autoIndexPage.size());
-			send(comm_socket_fd, response, strlen(response), 0);
-			send(comm_socket_fd, autoIndexPage.c_str(), autoIndexPage.size(), 0);
+			int len = std::strlen(response), sent_bytes;
+			int i = 0;
+			int total_sent_bytes; 
+			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
+			{
+				sent_bytes = send(comm_socket_fd, response, len, 0);
+				++i;
+			}
+			len = autoIndexPage.size();
+			i = 0;
+			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
+			{
+				sent_bytes = send(comm_socket_fd, autoIndexPage.c_str(), autoIndexPage.size(), 0);
+				++i;
+			}
 		}
 		else
-			sendErr(comm_socket_fd, "404");
+        	sendErr(comm_socket_fd, "500");
 	}
 	else if (result == 0 && (st.st_mode & S_IFMT) == S_IFREG) //fichier existe
 	{
@@ -287,19 +303,19 @@ void Server::get_methode(int comm_socket_fd)
 
 void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_size)
 {
-	const char *success_message = "HTTP/1.1 200 OK\nContent-Length: 0\n\n";
-	int file_fd, file_size, recv_bytes, wrote_bytes, i, total_recv_bytes;
+	const char *msg;
+	int file_fd, file_size, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
 	char body_size[14];
 	struct stat st;
 
 	//Trouver le chemin du fichier.
-	concatPath();
+	msg = concatPath();
 	//Trouver la taille du fichier.
 	file_size = get_fsize(request, comm_socket_fd);
 	if (file_size < 0)
 		return ;
-	file_fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (file_fd < 0)
+	opened_file = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (opened_file < 0)
     {
         printf("Error : unable to create %s\n", path);
         return;
@@ -307,10 +323,14 @@ void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_s
 	//Recevoir le fichier.
 printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
 	//Ecrire le morceau de body en trop.
-	//TODO::turn into loop.
 	if (body_chunk_size > 0)
 	{
-		recv_bytes = write(file_fd, header_end, body_chunk_size);
+		recv_bytes = write(opened_file, header_end, body_chunk_size);
+		if (recv_bytes < 1)
+		{
+			sendErr(comm_socket_fd, "500");
+			return;
+		}
 		file_size -= recv_bytes;
 	}
 	total_recv_bytes = 0;
@@ -319,22 +339,28 @@ printf("POST DEBUG file_size = %d\n", file_size);
 	//Chargement du buffer avec recv.
     while (total_recv_bytes < file_size && i < TIMEOUT)
     {
-       recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
+		recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
+		//Ecriture du buffer content avec write()
+		j = 0;
+		total_wrote_bytes = 0;
+		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
+		{
+			wrote_bytes = write(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
+			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
+			++j;
+		}
 		total_recv_bytes += recv_bytes * (recv_bytes > 0);
 		++i;
     }
-	//Ecriture du buffer content avec write()
-	total_recv_bytes = 0;
-	i = 0;
-	while (total_recv_bytes < file_size && i < TIMEOUT)
+	if (total_recv_bytes < file_size)
 	{
-		wrote_bytes = write(file_fd, body + total_recv_bytes, file_size);
-        total_recv_bytes += wrote_bytes * (wrote_bytes > 0);
-		++i;
+		sendErr(comm_socket_fd, "500");
+		return;
 	}
-printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
-    close(file_fd);
-	send(comm_socket_fd, success_message, strlen(success_message), 0);
+printf("POST DEBUG total_wrote_bytes = %d\n", total_wrote_bytes);
+    close(opened_file);
+	opened_file = -1;
+	send(comm_socket_fd, msg, strlen(msg), 0);
 }
 
 void Server::delete_methode(int comm_socket_fd)
@@ -350,7 +376,7 @@ void Server::delete_methode(int comm_socket_fd)
 	else
 	{
 		// Échec de la suppression du fichier
-        sendErr(comm_socket_fd, "404");//error 404
+        sendErr(comm_socket_fd, "500");
 	}
 }
 
@@ -449,6 +475,7 @@ void itoa(long long int value, char* buffer);
 #define E503 "./error/503.html"
 #define E504 "./error/504.html"
 #define OK "HTTP/1.1 200 OK\r\n"
+#define H301 "HTTP/1.1 301 Moved Permanently\r\n"
 #define H411 "HTTP/1.1 411 Length Required\r\n"
 #define H413 "HTTP/1.1 413 Payload Too Large\r\n"
 #define H404 "HTTP/1.1 404 Not Found\r\n"
@@ -501,6 +528,7 @@ class Server
 		int server_index;
 		int comm_socket_fd;
 		int loc_len;
+		int opened_file;
 	public:
 		Server(void);
 		~Server(void);
@@ -534,12 +562,15 @@ class Server
 		void get_methode(int comm_socket_fd);
 		void delete_methode(int comm_socket_fd);
 		void error_methode(int comm_socket_fd);
-		const char *Server::concatPath(void);
+		const char* concatPath(void);
 		void fillHeader(const char *first_field, const char *path, char* body_size, int body_len);
 		void sendErr(int comm_socket_fd, std::string code);
 		int get_fsize(char *request, int comm_socket_fd);
 		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
 };
+
+extern Server* serverInstance; // Pointeur global
+
 #endif
 
 ################################################File: ./src/ServerParsing.cpp
@@ -1307,7 +1338,7 @@ Server::Server(void)
 		std::cerr << RED << "Error : Unable to allocate Body." << RESET << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	memset(body, 0, MAX_BODY_SIZE);
+	opened_file = -1;
 	addr_len = sizeof(struct sockaddr);
 	timeout.tv_sec = SELECT_TIMEOUT_SEC;
 	timeout.tv_usec = SELECT_TIMEOUT_USEC;
@@ -1326,9 +1357,24 @@ Server::~Server(void)
 {
 	if (body)
 		delete[] body;
+
+	// Fermer tous les descripteurs de fichiers clients et maîtres
 	for (server_index = 0; server_index < MAX_VSERVER; ++server_index)
+	{
 		if (virtual_servers[server_index])
+		{
+			for (int i = 0; i < MAX_CLIENT + 1; ++i)
+			{
+				if (virtual_servers[server_index][i] != -1)
+				{
+					close(virtual_servers[server_index][i]);
+				}
+			}
 			delete[] virtual_servers[server_index];
+		}
+	}
+	if (opened_file != -1)
+		close(opened_file);
 }
 
 void Server::run(void)
@@ -1937,11 +1983,25 @@ typedef enum {
 ################################################File: ./src/main.cpp
 #include "Server.h"
 
-int main(void)
+void signalHandler(int signum)
 {
-	Server server;
-	server.run();
-	return EXIT_SUCCESS;
+	if (serverInstance)
+	{
+		delete serverInstance;
+		serverInstance = NULL;
+	}	
+	exit(signum);
 }
 
+int main(void)
+{
+	serverInstance = NULL;
+	signal(SIGINT, signalHandler);  // gere Ctrl+C.
+	signal(SIGTERM, signalHandler); // gere termination request.
+	signal(SIGSEGV, signalHandler); // gere segmentation fault.
+	serverInstance = new Server();
+	serverInstance->run();
+	delete serverInstance;
+	return EXIT_SUCCESS;
+}
 

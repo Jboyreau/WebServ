@@ -12,7 +12,7 @@ Server::Server(void)
 		std::cerr << RED << "Error : Unable to allocate Body." << RESET << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	memset(body, 0, MAX_BODY_SIZE);
+	opened_file = -1;
 	addr_len = sizeof(struct sockaddr);
 	timeout.tv_sec = SELECT_TIMEOUT_SEC;
 	timeout.tv_usec = SELECT_TIMEOUT_USEC;
@@ -31,9 +31,24 @@ Server::~Server(void)
 {
 	if (body)
 		delete[] body;
+
+	// Fermer tous les descripteurs de fichiers clients et maîtres
 	for (server_index = 0; server_index < MAX_VSERVER; ++server_index)
+	{
 		if (virtual_servers[server_index])
+		{
+			for (int i = 0; i < MAX_CLIENT + 1; ++i)
+			{
+				if (virtual_servers[server_index][i] != -1)
+				{
+					close(virtual_servers[server_index][i]);
+				}
+			}
 			delete[] virtual_servers[server_index];
+		}
+	}
+	if (opened_file != -1)
+		close(opened_file);
 }
 
 void Server::run(void)
