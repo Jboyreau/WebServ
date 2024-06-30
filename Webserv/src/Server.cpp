@@ -158,8 +158,10 @@ bool Server::findLongestMatchingPath(const char* location_key, std::map<std::str
 	std::strncpy(current_path, location_key, len);
 	current_path[len] = '\0';
 	char *current_path_end = current_path + len -1; //pointe la fin.
-	loc_len = 0;
+	
+	dir = (*current_path_end == '/');
 
+	loc_len = 0;
 	while (current_path != current_path_end)
 	{
 		std::cout << YELLOW << "DEBUG : loop current_path = " << current_path << RESET << std::endl;

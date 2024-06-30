@@ -261,7 +261,7 @@ void Server::get_methode(int comm_socket_fd)
 
 	msg = concatPath();
 	result = stat(path, &st);
-	if (result == 0 && (st.st_mode & S_IFMT) == S_IFDIR && temp.autoindex) //dossier existe && autoindex on
+	if (result == 0 && (st.st_mode & S_IFMT) == S_IFDIR && temp.autoindex && dir) //dossier existe && autoindex on
 	{
 		std::string autoIndexPage = generateAutoIndex(path);
 		if (!autoIndexPage.empty())
@@ -299,6 +299,7 @@ void Server::get_methode(int comm_socket_fd)
 	}
 	else //index was a lie.
 		sendErr(comm_socket_fd, "404");
+	dir = 0;
 }
 
 void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_size)

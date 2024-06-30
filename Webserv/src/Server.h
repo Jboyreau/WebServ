@@ -110,6 +110,7 @@ class Server
 		int comm_socket_fd;
 		int loc_len;
 		int opened_file;
+		bool dir;
 	public:
 		Server(void);
 		~Server(void);
