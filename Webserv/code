@@ -1,578 +1,3 @@
-################################################File: ./src/get_post_delete.cpp
-#include <string.h> //memeset(); strcpy; strcat();
-#include <limits.h> //PATH_MAX
-#include <stdlib.h> //
-#include <stdio.h> //
-#include <unistd.h> //read(); write();
-#include <fcntl.h> ///open()
-#include <sys/types.h> //send();
-#include <sys/socket.h> //send();
-#include <sys/stat.h> //stat()
-#include "Server.h"
-#include "itoa.h" //itoa
-#include "get_post_delete.h" //enum extension
-
-int Server::get_fsize(char *request, int comm_socket_fd)
-{
-	int len;
-	char *content_length_str = std::strstr(request, "Content-Length: ");
-
-	if (!content_length_str)
-	{
-		// Error: No Content-Length found
-		sendErr(comm_socket_fd, "411");
-		return -1;
-	}
-	content_length_str += 16;
-	len = atoi(content_length_str);
-	if (len > conf.max_body_size)
-	{
-		sendErr(comm_socket_fd, "413");
-		return -1;
-	}
-	return len;
-}
-
-const char *Server::concatPath(void)
-{
-	const char *ptr;
-	int i;
-	if (*temp.ret == 0)
-	{
-		ptr = location_key.c_str();
-		if (*ptr)
-			ptr = location_key.c_str() + 1;
-		for (i = 0; *(ptr + i) != '/' && *(ptr + i); ++i)
-			;	
-		if (*(ptr + i) == '/')
-			ptr = ptr + i + 1;
-		std::strcpy(path, temp.root);
-		std::strcat(path, ptr);
-		return OK;
-	}
-	ptr = temp.ret;
-	if (*ptr)
-		ptr = temp.ret + 1;
-	for(i = 0; *(ptr + i) != '/' && *(ptr + i); ++i)
-		;
-	if (*(ptr + i) == '/')
-		ptr = ptr + i + 1;
-	std::strcpy(path, temp.root);
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
-	std::strcat(path, ptr);
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
-	ptr = location_key.c_str();
-	std::cout << YELLOW << "pre loop ptr = " << ptr << RESET << std::endl;
-	std::cout << YELLOW << "Location len =" << loc_len << RESET << std::endl;
-	for (i = 0; i < loc_len; ++i)
-		;
-	ptr = ptr + i;
-	std::cout << YELLOW << " post loop ptr + i = " << *(ptr + i) << RESET << std::endl;
-	std::cout << YELLOW << " post loop ptr = " << ptr << RESET << std::endl;
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
-	std::strcat(path, ptr);
-	return H301;
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
-}
-
-static int keygen(const char *ext)
-{
-	int sum = 0;
-	int i;
-
-	for (i = 1; *(ext + i); ++i)
-		sum += *(ext + i);
-	return sum * *(ext + 1);
-}
-
-void Server::fillHeader(const char *first_field, const char *path, char* body_size, int body_len)
-{
-	const char *ext;
-	int key;
-
-	std::strcpy(response, first_field);
-	std::strcat(response, "Server: My Personal HTTP Server\r\n");
-	std::strcat(response, "Content-Length: ");
-	itoa(body_len, body_size);
-	std::strcat(response, body_size);
-	std::strcat(response, "\r\n");
-	std::strcat(response, "Connection: close\r\n"); 
-	// Déterminer le type de contenu en fonction de l'extension du fichier.	
-	ext = std::strrchr(path, '.');
-	if (ext != NULL)
-	{
-		key = keygen(ext);
-		printf("*DEBUG! EXT = %s\r\n", ext);
-		switch (key)
-		{
-			case HTML_KEY:
-				std::strcat(response, "Content-Type: text/html; charset=UTF-8\r\n");
-				break;
-			case HTM_KEY:
-				std::strcat(response, "Content-Type: text/html; charset=UTF-8\r\n");
-				break;
-			case CSS_KEY:
-				std::strcat(response, "Content-Type: text/css\r\n");
-				break;
-			case JS_KEY:
-				std::strcat(response, "Content-Type: application/javascript\r\n");
-				break;
-			case JSON_KEY:
-				std::strcat(response, "Content-Type: application/json\r\n");
-				break;
-			case XML_KEY:
-				std::strcat(response, "Content-Type: application/xml\r\n");
-				break;
-			case TXT_KEY:
-				std::strcat(response, "Content-Type: text/plain\r\n");
-				break;
-			case JPEG_KEY:
-				std::strcat(response, "Content-Type: image/jpeg\r\n");
-				break;
-			case JPG_KEY:
-				std::strcat(response, "Content-Type: image/jpeg\r\n");
-				break;
-			case PNG_KEY:
-				std::strcat(response, "Content-Type: image/png\r\n");
-				break;
-			case GIF_KEY:
-				std::strcat(response, "Content-Type: image/gif\r\n");
-				break;
-			case SVG_KEY:
-				std::strcat(response, "Content-Type: image/svg+xml\r\n");	
-				break;
-			case ICO_KEY:
-				std::strcat(response, "Content-Type: image/x-icon\r\n");	
-				break;
-			case PDF_KEY:
-				std::strcat(response, "Content-Type: application/pdf\r\n");	
-				break;
-			case ZIP_KEY:
-				std::strcat(response, "Content-Type: application/zip\r\n");	
-				break;
-			case MP4_KEY:
-				std::strcat(response, "Content-Type: video/mp4\r\n");
-				break;
-			case WEBM_KEY:
-				std::strcat(response, "Content-Type: video/webm\r\n");
-				break;
-			case MP3_KEY:
-				std::strcat(response, "Content-Type: audio/mpeg\r\n");
-				break;
-			case WAV_KEY:
-				std::strcat(response, "Content-Type: audio/wav\r\n");
-				break;
-			default: //extension inconnue. 
-				std::strcat(response, "Content-Type: application/octet-stream\r\n"); //Le client telecharge le fichier.
-		}
-	}
-	else //pas d'extension.
-		std::strcat(response, "Content-Type: application/octet-stream\r\n"); //Le client telecharge le fichier.
-	std::strcat(response, "\r\n");
-}
-
-void Server::respond(const char *path, int client_socket_fd, int file_size)
-{
-	int response_len = std::strlen(response), total_sent_bytes, total_read_bytes, sent_bytes, read_bytes, i, j;
-
-	//Ouverture du fichier a envoyer:
-	opened_file = open(path, O_RDONLY);
-	if (opened_file < 0)
-	{
-		printf("Error: unable to open %s\n", path);
-        sendErr(comm_socket_fd, "500");
-		return; //error
-	}
-	//Envoi du header.
-	total_sent_bytes = 0;
-	sent_bytes = 1;
-	i = 0;
-	while (total_sent_bytes < response_len && i < TIMEOUT)
-	{
-		 //Envoie du chunk.
-		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0);
-		total_sent_bytes += sent_bytes;
-		++i;
-	}
-	//Envoi du fichier
-printf("RESPOND DEBUG: file_size = %d\n", file_size);
-	read_bytes = 0;
-	total_read_bytes = 0;
-	i = 0;
-	while (total_read_bytes < file_size && i < TIMEOUT)
-	{
-		//Chargement du chunk dans le buffer.
-		read_bytes = read(opened_file, body + total_read_bytes, file_size);
-		j = 0;
-		total_sent_bytes = 0;
-		while (total_sent_bytes < read_bytes && j < TIMEOUT)
-		{
-			sent_bytes = send(client_socket_fd, body + total_read_bytes + total_sent_bytes, file_size, 0); //Envoie du chunk.
-			total_sent_bytes += sent_bytes * (sent_bytes > 0);
-			++j;
-		}
-		total_read_bytes += read_bytes * (read_bytes > 0);
-		++i;
-	}
-printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
-	close(opened_file);
-	opened_file = -1;
-}
-
-std::string generateAutoIndex(const std::string &path)
-{
-	DIR *dir;
-	struct dirent *ent;
-	struct stat st;
-	std::ostringstream oss;
-
-	if ((dir = opendir(path.c_str())) != NULL)
-	{
-		oss << "<html><head><title>Index of " << path << "</title></head><body>";
-		oss << "<h1>Index of " << path << "</h1><ul>";
-		while ((ent = readdir(dir)) != NULL)
-		{
-			std::string fullPath = path + "/" + ent->d_name;
-			stat(fullPath.c_str(), &st);
-			if (S_ISDIR(st.st_mode))
-			{
-				oss << "<li><a href=\"" << ent->d_name << "/\">" << ent->d_name << "/</a></li>";
-			}
-			else
-				oss << "<li><a href=\"" << ent->d_name << "\">" << ent->d_name << "</a></li>";
-		}
-		oss << "</ul></body></html>";
-		closedir(dir);
-	}
-	else
-	{
-		perror("opendir");
-		return ""; // error
-	}
-	return oss.str();
-}
-
-void Server::get_methode(int comm_socket_fd)
-{
-	const char *msg;
-	char body_size[14];
-	int result;
-	struct stat st;
-
-	msg = concatPath();
-	result = stat(path, &st);
-	if (result == 0 && (st.st_mode & S_IFMT) == S_IFDIR && temp.autoindex) //dossier existe && autoindex on
-	{
-		std::string autoIndexPage = generateAutoIndex(path);
-		if (!autoIndexPage.empty())
-		{
-			std::strcat(path, ".html");
-			fillHeader(msg, path, body_size, autoIndexPage.size());
-			int len = std::strlen(response), sent_bytes;
-			int i = 0;
-			int total_sent_bytes; 
-			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
-			{
-				sent_bytes = send(comm_socket_fd, response, len, 0);
-				++i;
-			}
-			len = autoIndexPage.size();
-			i = 0;
-			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
-			{
-				sent_bytes = send(comm_socket_fd, autoIndexPage.c_str(), autoIndexPage.size(), 0);
-				++i;
-			}
-		}
-		else
-        	sendErr(comm_socket_fd, "500");
-	}
-	else if (result == 0 && (st.st_mode & S_IFMT) == S_IFREG) //fichier existe
-	{
-		fillHeader(msg, path, body_size, st.st_size);
-		respond(path, comm_socket_fd, st.st_size);
-	}
-	else if (stat(temp.index, &st) == 0) //index existe
-	{
-		fillHeader(msg, temp.index, body_size, st.st_size);
-		respond(temp.index, comm_socket_fd, st.st_size);
-	}
-	else //index was a lie.
-		sendErr(comm_socket_fd, "404");
-}
-
-void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_size)
-{
-	const char *msg;
-	int file_fd, file_size, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
-	char body_size[14];
-	struct stat st;
-
-	//Trouver le chemin du fichier.
-	msg = concatPath();
-	//Trouver la taille du fichier.
-	file_size = get_fsize(request, comm_socket_fd);
-	if (file_size < 0)
-		return ;
-	opened_file = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (opened_file < 0)
-    {
-        printf("Error : unable to create %s\n", path);
-        return;
-    }
-	//Recevoir le fichier.
-printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
-	//Ecrire le morceau de body en trop.
-	if (body_chunk_size > 0)
-	{
-		recv_bytes = write(opened_file, header_end, body_chunk_size);
-		if (recv_bytes < 1)
-		{
-			sendErr(comm_socket_fd, "500");
-			return;
-		}
-		file_size -= recv_bytes;
-	}
-	total_recv_bytes = 0;
-	i = 0;
-printf("POST DEBUG file_size = %d\n", file_size);
-	//Chargement du buffer avec recv.
-    while (total_recv_bytes < file_size && i < TIMEOUT)
-    {
-		recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
-		//Ecriture du buffer content avec write()
-		j = 0;
-		total_wrote_bytes = 0;
-		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
-		{
-			wrote_bytes = write(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
-			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
-			++j;
-		}
-		total_recv_bytes += recv_bytes * (recv_bytes > 0);
-		++i;
-    }
-	if (total_recv_bytes < file_size)
-	{
-		sendErr(comm_socket_fd, "500");
-		return;
-	}
-printf("POST DEBUG total_wrote_bytes = %d\n", total_wrote_bytes);
-    close(opened_file);
-	opened_file = -1;
-	send(comm_socket_fd, msg, strlen(msg), 0);
-}
-
-void Server::delete_methode(int comm_socket_fd)
-{
-	char body_size[14], path[PATH_MAX];
-
-	concatPath();
-	if (remove(path) == 0)
-	{
-		// Fichier supprimé avec succès
-		send(comm_socket_fd, OK, strlen(OK), 0);
-	}
-	else
-	{
-		// Échec de la suppression du fichier
-        sendErr(comm_socket_fd, "500");
-	}
-}
-
-################################################File: ./src/itoa.cpp
-void itoa(long long int value, char* buffer)
-{
-	char* ptr = buffer;
-	char* ptr1 = buffer;
-	char tmp_char;
-	long long int tmp_value;
-
-	if (value < 0) {
-		value = -value;
-		*ptr++ = '-';
-	}
-	do
-	{
-		tmp_value = value;
-		value /= 10;
-		*ptr++ = "0123456789"[tmp_value - value * 10];
-	}
-	while (value);
-	*ptr-- = '\0';
-	if (buffer[0] == '-')
-		ptr1++;
-	while (ptr1 < ptr)
-	{
-		tmp_char = *ptr;
-		*ptr-- = *ptr1;
-		*ptr1++ = tmp_char;
-	}
-}
-
-################################################File: ./src/itoa.h
-#ifndef ITOA_H
-#define ITOA_H
-void itoa(long long int value, char* buffer);
-#endif
-
-################################################File: ./src/Server.h
-#ifndef SERVER_H
-#define SERVER_H
-
-#include <iostream>
-#include <vector>
-#include <map>
-#include <algorithm>
-
-#include <unistd.h> //read(); write();
-#include <stdlib.h> //
-#include <stdio.h> //
-#include <sys/time.h> //struct timeval
-#include <signal.h> //signal();
-#include <sys/select.h> //type fd_set;
-#include <sys/types.h> //send();
-#include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR; inet_ntoa(); send();
-#include <netinet/in.h> //IPPROTO_TCP;
-#include <arpa/inet.h>	//ntohs();
-#include <string.h> //memset(); strcpy; strcat();
-#include <sstream>
-#include <netdb.h>
-#include <memory.h>
-#include <errno.h>
-#include <fcntl.h> //fcntl
-#include <limits.h> //PATH_MAX
-#include <sys/types.h> //send();
-#include <sys/socket.h> //send();
-#include <sys/stat.h> //stat()
-#include <stdint.h> //unint32_t
-#include <dirent.h> // opendir, readdir, closedir
-#include "ServerUtils.h"
-
-#define TIMEOUT 10000000
-#define SELECT_TIMEOUT_SEC 0
-#define SELECT_TIMEOUT_USEC 0
-#define HTTP_HEADER_SIZE 16384
-#define MAX_VSERVER 5
-#define MAX_CLIENT 10
-#define REQUEST_QUEUE_LEN 100
-#define MAX_BODY_SIZE 1000000000 //byte
-#define MAX_SERVER_NAME_LEN 253
-#define CNF_PATH "./config/config.txt"
-#define DEFAULT_INDEX_PATH "./default/default.html"
-#define DEFAULT_CGI_PATH "./cgi/php-cgi"
-#define DEFAULT_ROOT "./"
-#define RED "\033[1;31m" //Error
-#define YELLOW "\033[1;33m" //Debug
-#define GREEN "\033[1;32m" //Info
-#define RESET "\033[0m"
-#define E411 "./error/411.html"
-#define E413 "./error/413.html"
-#define E404 "./error/404.html"
-#define E403 "./error/403.html"
-#define E500 "./error/500.html"
-#define E502 "./error/502.html"
-#define E503 "./error/503.html"
-#define E504 "./error/504.html"
-#define OK "HTTP/1.1 200 OK\r\n"
-#define H301 "HTTP/1.1 301 Moved Permanently\r\n"
-#define H411 "HTTP/1.1 411 Length Required\r\n"
-#define H413 "HTTP/1.1 413 Payload Too Large\r\n"
-#define H404 "HTTP/1.1 404 Not Found\r\n"
-#define H403 "HTTP/1.1 403 Forbidden\r\n"
-#define H500 "HTTP/1.1 500 Internal Server Error\r\n"
-#define H502 "HTTP/1.1 502 Bad Gateway\r\n"
-#define H503 "HTTP/1.1 503 Service Unavailable\r\n"
-#define H504 "HTTP/1.1 504 Gateway Timeout\r\n"
-
-typedef struct s_location
-{
-	std::map<std::string, bool> method_map;
-	char root[PATH_MAX];
-	bool autoindex;
-	char index[PATH_MAX];
-	char cgi_path[PATH_MAX];
-	char ret[PATH_MAX];
-} t_location;
-
-typedef struct s_config
-{
-	struct sockaddr_in server_addr;
-	std::map<std::string, int> name_map;
-	std::map<std::string, std::string> error_map;
-	size_t max_body_size;
-	std::map<std::string, t_location> location_map;	
-} t_config;
-
-class Server
-{
-	private:
-		std::map<std::string, std::string> http_error_map;
-		std::string location_key;
-		t_config cnf[MAX_VSERVER];
-		t_config conf;
-		t_location temp;
-		char response[HTTP_HEADER_SIZE];
-		char request[HTTP_HEADER_SIZE];
-		char path[PATH_MAX];
-		int *virtual_servers[MAX_VSERVER];
-		struct sockaddr_in client_addr;
-		struct timeval timeout;
-		fd_set readfds;
-		fd_set writefds;
-		fd_set exceptfds;
-		char *body;
-		int opt;
-		size_t cnf_len;
-		unsigned int addr_len;
-		int server_index;
-		int comm_socket_fd;
-		int loc_len;
-		int opened_file;
-	public:
-		Server(void);
-		~Server(void);
-		bool parsing(void);
-		bool ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool rulePort(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleIp(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleName(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleMethode(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleRoot(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleAutoIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		bool ruleReturn(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
-		void run(void);
-		void setup(void);
-		void communicate(void);
-		void acceptServe(int *fds_buffer, int master_sock_tcp_fd);
-		int getMaxFd(int* fds_buffer);
-		void setNonBlocking(int socket);
-		bool canAccessDirectory(const char *path);
-		bool canAccessFile(const char *path, int flag);
-		//TEMP
-		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
-		void respond(const char *path, int client_socket_fd, int file_size);
-		void get_methode(int comm_socket_fd);
-		void delete_methode(int comm_socket_fd);
-		void error_methode(int comm_socket_fd);
-		const char* concatPath(void);
-		void fillHeader(const char *first_field, const char *path, char* body_size, int body_len);
-		void sendErr(int comm_socket_fd, std::string code);
-		int get_fsize(char *request, int comm_socket_fd);
-		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
-};
-
-extern Server* serverInstance; // Pointeur global
-
-#endif
-
 ################################################File: ./src/ServerParsing.cpp
 #include "Server.h"
 
@@ -1323,6 +748,809 @@ bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port);
 bool configErr(const std::vector<t_token>::iterator &it, int linT);
 #endif
 
+################################################File: ./src/itoa.cpp
+void itoa(long long int value, char* buffer)
+{
+	char* ptr = buffer;
+	char* ptr1 = buffer;
+	char tmp_char;
+	long long int tmp_value;
+
+	if (value < 0) {
+		value = -value;
+		*ptr++ = '-';
+	}
+	do
+	{
+		tmp_value = value;
+		value /= 10;
+		*ptr++ = "0123456789"[tmp_value - value * 10];
+	}
+	while (value);
+	*ptr-- = '\0';
+	if (buffer[0] == '-')
+		ptr1++;
+	while (ptr1 < ptr)
+	{
+		tmp_char = *ptr;
+		*ptr-- = *ptr1;
+		*ptr1++ = tmp_char;
+	}
+}
+
+################################################File: ./src/get_post_delete.h
+#ifndef GETPOSTDELETE_H
+#define GETPOSTDELETE_H
+typedef enum {
+    HTML_KEY = 45448,
+    HTM_KEY = 34216,
+    CSS_KEY = 32571,
+    JS_KEY = 23426,
+    JSON_KEY = 46852,
+    XML_KEY = 40440,
+    TXT_KEY = 40832,
+    JPG_KEY = 34026,
+    JPEG_KEY = 44732,
+    PNG_KEY = 36400,
+    GIF_KEY = 31930,
+    SVG_KEY = 38640,
+    ICO_KEY = 33075,
+    PDF_KEY = 35168,
+    ZIP_KEY = 41358,
+    MP4_KEY = 29757,
+    WEBM_KEY = 50813,
+    MP3_KEY = 29648,
+    WAV_KEY = 39746
+} FileExtensionKey;
+
+typedef enum {
+    GET = 'G' + 'E',
+	POST = 'P' + 'O',
+	DELETE = 'D' + 'E',
+} MethodType;
+
+#endif
+
+################################################File: ./src/main.cpp
+#include "Server.h"
+Server* serverInstance = NULL;
+
+void signalHandler(int signum)
+{
+	if (serverInstance)
+	{
+		delete serverInstance;
+		serverInstance = NULL;
+	}	
+	exit(signum);
+}
+
+int main(void)
+{
+	serverInstance = NULL;
+	signal(SIGINT, signalHandler);  // gere Ctrl+C.
+	signal(SIGTERM, signalHandler); // gere termination request.
+	signal(SIGSEGV, signalHandler); // gere segmentation fault.
+	serverInstance = new Server();
+	serverInstance->run();
+	delete serverInstance;
+	return EXIT_SUCCESS;
+}
+
+################################################File: ./src/ServerUtils.cpp
+#include "ServerUtils.h"
+
+char* loadFileToBuffer(const char* filename)
+{
+	char *buffer;
+	std::ifstream file(filename, std::ios::binary | std::ios::ate); //Ouvrir en mode binaire et placer le curseur à la fin
+	if (!file)
+	{
+		std::cerr << RED << "Error : Ubnable to open the configuration file." << RESET << std::endl;
+		exit(EXIT_FAILURE);
+	}
+	std::streamsize size = file.tellg(); //Obtenir la taille du fichier
+	file.seekg(0, std::ios::beg); //Revenir au début du fichier
+	buffer = new char[size + 1]; //Allouer le buffer avec un octet supplémentaire pour le caractère nul
+	if (file.read(buffer, size)) //Lire le fichier dans le buffer
+	{
+		buffer[size] = '\0'; //Ajouter le caractère nul à la fin du buffer
+		return buffer;
+	}
+	delete[] buffer;
+	std::cerr << RED << "Error : Configuration read failed." << RESET << std::endl;
+	exit(EXIT_FAILURE);
+}
+
+bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port)
+{
+	for (size_t i = 0; i < (*it).len; ++i)
+		if (!std::isdigit(*((*it).str + i)))
+			return false;
+	// Convertir la chaîne en entier
+	port = std::atoi((*it).str);
+	// Vérifier si le numéro de port est dans la plage valide (1 à 65535)
+	if (port < 1 || port > 65535)
+		return false;
+	port = htons(port);
+	return true;
+}
+
+uint32_t ftInetAddr(const std::vector<t_token>::iterator &it)
+{
+	const char *ip_address = (*it).str;
+	unsigned long int result = 0;
+	int byte, i;
+
+	for (i = 0; *(ip_address + i) != '\n' && *(ip_address + i); ++i)
+		if (!isdigit(*(ip_address + i)) && *(ip_address + i) != '.')
+			return INADDR_NONE;
+	for (i = 1; *ip_address != '\n' && *ip_address; ++i)
+	{
+		byte = atoi(ip_address);
+		if (byte < 0 || byte > 255)
+			return INADDR_NONE;
+		result += (byte << ((4 - i) * 8));
+		while(*ip_address != '.' && *ip_address != '\n' && *ip_address)
+			++ip_address;
+		if (*ip_address == '.')
+			++ip_address;
+	}
+	return htonl(result);
+}
+
+t_token findType(char *buffer, int *index)
+{
+	t_token token;
+	int len = 0;
+
+	while (*(buffer + len) && *(buffer + len) != '\n' && !std::isspace(static_cast<unsigned char>(*(buffer + len))))
+		++len;
+	(*index) += len;
+	token.str = buffer;
+	token.len = len;
+	if (strncmp(buffer, "server", len) == 0)
+	{
+		token.type = SERVER;
+	}
+	else if (strncmp(buffer, "listen", len) == 0)
+	{
+		token.type = PORT;
+	}
+	else if (strncmp(buffer, "host", len) == 0)
+	{
+		token.type = IP;
+	}
+	else if (strncmp(buffer, "server_name", len) == 0)
+	{
+		token.type = NAME;
+	}
+	else if (strncmp(buffer, "error_page", len) == 0)
+	{
+		token.type = ERR;
+	}
+	else if (strncmp(buffer, "client_max_body_size", len) == 0)
+	{
+		token.type = SIZE;
+	}
+	else if (strncmp(buffer, "location", len) == 0)
+	{
+		token.type = LOC;
+	}
+	else if (strncmp(buffer, "allow_methods", len) == 0)
+	{
+		token.type = METH;
+	}
+	else if (strncmp(buffer, "root", len) == 0)
+	{
+		token.type = ROOT;
+	}
+	else if (strncmp(buffer, "autoindex", len) == 0)
+	{
+		token.type = AUTOINDEX;
+	}
+	else if (strncmp(buffer, "index", len) == 0)
+	{
+		token.type = INDEX;
+	}
+	else if (strncmp(buffer, "cgi_path", len) == 0)
+	{
+		token.type = CGIPATH;
+	}
+	else if (strncmp(buffer, "return", len) == 0)
+	{
+		token.type = RETURN;
+	}
+	else
+		token.type = WORD;
+	return token;
+}
+
+std::vector<t_token> tokenizer(char *buffer)
+{
+	int i = 0;
+
+	std::vector<t_token> token_liste;
+	t_token token;
+
+	while (*(buffer + i))
+	{
+		if (*(buffer + i) == '\n' || std::isspace(static_cast<unsigned char>(*(buffer + i))))
+		{
+			if (*(buffer + i) == '\n')
+			{
+				token.str = NL;
+				token.len = 1;
+				token.type = END;
+				token_liste.push_back(token);
+			}
+			++i;
+		}
+		else if (*(buffer + i))
+		{
+			token = findType(buffer + i, &i);
+			token_liste.push_back(token);
+		}
+	}
+	return token_liste;
+}
+
+bool configErr(const std::vector<t_token>::iterator &it, int line)
+{
+	std::cerr << RED << "Error Config : line " << line << " near ";
+	std::cerr.write((*it).str, (*it).len);
+	std::cerr << RESET << std::endl;
+	return false;
+}
+
+################################################File: ./src/Server.h
+#ifndef SERVER_H
+#define SERVER_H
+
+#include <iostream>
+#include <vector>
+#include <map>
+#include <algorithm>
+
+#include <unistd.h> //read(); write();
+#include <stdlib.h> //
+#include <stdio.h> //
+#include <sys/time.h> //struct timeval
+#include <signal.h> //signal();
+#include <sys/select.h> //type fd_set;
+#include <sys/types.h> //send();
+#include <sys/socket.h> //struct sockaddr_in; AF_INET; SOL_SOCKET; SO_REUSEADDR; inet_ntoa(); send();
+#include <netinet/in.h> //IPPROTO_TCP;
+#include <arpa/inet.h>	//ntohs();
+#include <string.h> //memset(); strcpy; strcat();
+#include <sstream>
+#include <netdb.h>
+#include <memory.h>
+#include <errno.h>
+#include <fcntl.h> //fcntl
+#include <limits.h> //PATH_MAX
+#include <sys/types.h> //send();
+#include <sys/socket.h> //send();
+#include <sys/stat.h> //stat()
+#include <stdint.h> //unint32_t
+#include <dirent.h> // opendir, readdir, closedir
+#include "ServerUtils.h"
+
+#define TIMEOUT 10000000
+#define SELECT_TIMEOUT_SEC 0
+#define SELECT_TIMEOUT_USEC 0
+#define HTTP_HEADER_SIZE 16384
+#define MAX_VSERVER 5
+#define MAX_CLIENT 10
+#define REQUEST_QUEUE_LEN 100
+#define MAX_BODY_SIZE 1000000000 //byte
+#define MAX_SERVER_NAME_LEN 253
+#define CNF_PATH "./config/config.txt"
+#define DEFAULT_INDEX_PATH "./default/default.html"
+#define DEFAULT_CGI_PATH "./cgi/php-cgi"
+#define DEFAULT_ROOT "./"
+#define RED "\033[1;31m" //Error
+#define YELLOW "\033[1;33m" //Debug
+#define GREEN "\033[1;32m" //Info
+#define RESET "\033[0m"
+#define E411 "./error/411.html"
+#define E413 "./error/413.html"
+#define E404 "./error/404.html"
+#define E403 "./error/403.html"
+#define E500 "./error/500.html"
+#define E502 "./error/502.html"
+#define E503 "./error/503.html"
+#define E504 "./error/504.html"
+#define OK "HTTP/1.1 200 OK\r\n"
+#define H301 "HTTP/1.1 301 Moved Permanently\r\n"
+#define H411 "HTTP/1.1 411 Length Required\r\n"
+#define H413 "HTTP/1.1 413 Payload Too Large\r\n"
+#define H404 "HTTP/1.1 404 Not Found\r\n"
+#define H403 "HTTP/1.1 403 Forbidden\r\n"
+#define H500 "HTTP/1.1 500 Internal Server Error\r\n"
+#define H502 "HTTP/1.1 502 Bad Gateway\r\n"
+#define H503 "HTTP/1.1 503 Service Unavailable\r\n"
+#define H504 "HTTP/1.1 504 Gateway Timeout\r\n"
+
+typedef struct s_location
+{
+	std::map<std::string, bool> method_map;
+	char root[PATH_MAX];
+	bool autoindex;
+	char index[PATH_MAX];
+	char cgi_path[PATH_MAX];
+	char ret[PATH_MAX];
+} t_location;
+
+typedef struct s_config
+{
+	struct sockaddr_in server_addr;
+	std::map<std::string, int> name_map;
+	std::map<std::string, std::string> error_map;
+	size_t max_body_size;
+	std::map<std::string, t_location> location_map;	
+} t_config;
+
+class Server
+{
+	private:
+		std::map<std::string, std::string> http_error_map;
+		std::string location_key;
+		t_config cnf[MAX_VSERVER];
+		t_config conf;
+		t_location temp;
+		char response[HTTP_HEADER_SIZE];
+		char request[HTTP_HEADER_SIZE];
+		char path[PATH_MAX];
+		int *virtual_servers[MAX_VSERVER];
+		struct sockaddr_in client_addr;
+		struct timeval timeout;
+		fd_set readfds;
+		fd_set writefds;
+		fd_set exceptfds;
+		char *body;
+		int opt;
+		size_t cnf_len;
+		unsigned int addr_len;
+		int server_index;
+		int comm_socket_fd;
+		int loc_len;
+		int opened_file;
+		bool dir;
+	public:
+		Server(void);
+		~Server(void);
+		bool parsing(void);
+		bool ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool rulePort(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleIp(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleName(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleMethode(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleRoot(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleAutoIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleIndex(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleCgiPath(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		bool ruleReturn(std::vector<t_token> &token_liste, std::vector<t_token>::iterator &it, int &line);
+		void run(void);
+		void setup(void);
+		void communicate(void);
+		void acceptServe(int *fds_buffer, int master_sock_tcp_fd);
+		int getMaxFd(int* fds_buffer);
+		void setNonBlocking(int socket);
+		bool canAccessDirectory(const char *path);
+		bool canAccessFile(const char *path, int flag);
+		//TEMP
+		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
+		void respond(const char *path, int client_socket_fd, int file_size);
+		void get_methode(int comm_socket_fd);
+		void delete_methode(int comm_socket_fd);
+		void error_methode(int comm_socket_fd);
+		const char* concatPath(void);
+		void fillHeader(const char *first_field, const char *path, char* body_size, int body_len);
+		void sendErr(int comm_socket_fd, std::string code);
+		int get_fsize(char *request, int comm_socket_fd);
+		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
+};
+
+extern Server* serverInstance; // Pointeur global
+
+#endif
+
+################################################File: ./src/itoa.h
+#ifndef ITOA_H
+#define ITOA_H
+void itoa(long long int value, char* buffer);
+#endif
+
+################################################File: ./src/get_post_delete.cpp
+#include <string.h> //memeset(); strcpy; strcat();
+#include <limits.h> //PATH_MAX
+#include <stdlib.h> //
+#include <stdio.h> //
+#include <unistd.h> //read(); write();
+#include <fcntl.h> ///open()
+#include <sys/types.h> //send();
+#include <sys/socket.h> //send();
+#include <sys/stat.h> //stat()
+#include "Server.h"
+#include "itoa.h" //itoa
+#include "get_post_delete.h" //enum extension
+
+int Server::get_fsize(char *request, int comm_socket_fd)
+{
+	int len;
+	char *content_length_str = std::strstr(request, "Content-Length: ");
+
+	if (!content_length_str)
+	{
+		// Error: No Content-Length found
+		sendErr(comm_socket_fd, "411");
+		return -1;
+	}
+	content_length_str += 16;
+	len = atoi(content_length_str);
+	if (len > conf.max_body_size)
+	{
+		sendErr(comm_socket_fd, "413");
+		return -1;
+	}
+	return len;
+}
+
+const char *Server::concatPath(void)
+{
+	const char *ptr;
+	int i;
+	if (*temp.ret == 0)
+	{
+		ptr = location_key.c_str();
+		if (*ptr)
+			ptr = location_key.c_str() + 1;
+		for (i = 0; *(ptr + i) != '/' && *(ptr + i); ++i)
+			;	
+		if (*(ptr + i) == '/')
+			ptr = ptr + i + 1;
+		std::strcpy(path, temp.root);
+		std::strcat(path, ptr);
+		std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+		return OK;
+	}
+	ptr = temp.ret;
+	if (*ptr)
+		ptr = temp.ret + 1;
+	for(i = 0; *(ptr + i) != '/' && *(ptr + i); ++i)
+		;
+	if (*(ptr + i) == '/')
+		ptr = ptr + i + 1;
+	std::strcpy(path, temp.root);
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+	std::strcat(path, ptr);
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+	ptr = location_key.c_str();
+	std::cout << YELLOW << "pre loop ptr = " << ptr << RESET << std::endl;
+	std::cout << YELLOW << "Location len =" << loc_len << RESET << std::endl;
+	for (i = 0; i < loc_len; ++i)
+		;
+	ptr = ptr + i;
+	std::cout << YELLOW << " post loop ptr + i = " << *(ptr + i) << RESET << std::endl;
+	std::cout << YELLOW << " post loop ptr = " << ptr << RESET << std::endl;
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+	std::strcat(path, ptr);
+	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
+	return H301;
+}
+
+static int keygen(const char *ext)
+{
+	int sum = 0;
+	int i;
+
+	for (i = 1; *(ext + i); ++i)
+		sum += *(ext + i);
+	return sum * *(ext + 1);
+}
+
+void Server::fillHeader(const char *first_field, const char *path, char* body_size, int body_len)
+{
+	const char *ext;
+	int key;
+
+	std::strcpy(response, first_field);
+	std::strcat(response, "Server: My Personal HTTP Server\r\n");
+	std::strcat(response, "Content-Length: ");
+	itoa(body_len, body_size);
+	std::strcat(response, body_size);
+	std::strcat(response, "\r\n");
+	std::strcat(response, "Connection: close\r\n"); 
+	// Déterminer le type de contenu en fonction de l'extension du fichier.	
+	ext = std::strrchr(path, '.');
+	if (ext != NULL)
+	{
+		key = keygen(ext);
+		printf("*DEBUG! EXT = %s\r\n", ext);
+		switch (key)
+		{
+			case HTML_KEY:
+				std::strcat(response, "Content-Type: text/html; charset=UTF-8\r\n");
+				break;
+			case HTM_KEY:
+				std::strcat(response, "Content-Type: text/html; charset=UTF-8\r\n");
+				break;
+			case CSS_KEY:
+				std::strcat(response, "Content-Type: text/css\r\n");
+				break;
+			case JS_KEY:
+				std::strcat(response, "Content-Type: application/javascript\r\n");
+				break;
+			case JSON_KEY:
+				std::strcat(response, "Content-Type: application/json\r\n");
+				break;
+			case XML_KEY:
+				std::strcat(response, "Content-Type: application/xml\r\n");
+				break;
+			case TXT_KEY:
+				std::strcat(response, "Content-Type: text/plain\r\n");
+				break;
+			case JPEG_KEY:
+				std::strcat(response, "Content-Type: image/jpeg\r\n");
+				break;
+			case JPG_KEY:
+				std::strcat(response, "Content-Type: image/jpeg\r\n");
+				break;
+			case PNG_KEY:
+				std::strcat(response, "Content-Type: image/png\r\n");
+				break;
+			case GIF_KEY:
+				std::strcat(response, "Content-Type: image/gif\r\n");
+				break;
+			case SVG_KEY:
+				std::strcat(response, "Content-Type: image/svg+xml\r\n");	
+				break;
+			case ICO_KEY:
+				std::strcat(response, "Content-Type: image/x-icon\r\n");	
+				break;
+			case PDF_KEY:
+				std::strcat(response, "Content-Type: application/pdf\r\n");	
+				break;
+			case ZIP_KEY:
+				std::strcat(response, "Content-Type: application/zip\r\n");	
+				break;
+			case MP4_KEY:
+				std::strcat(response, "Content-Type: video/mp4\r\n");
+				break;
+			case WEBM_KEY:
+				std::strcat(response, "Content-Type: video/webm\r\n");
+				break;
+			case MP3_KEY:
+				std::strcat(response, "Content-Type: audio/mpeg\r\n");
+				break;
+			case WAV_KEY:
+				std::strcat(response, "Content-Type: audio/wav\r\n");
+				break;
+			default: //extension inconnue. 
+				std::strcat(response, "Content-Type: application/octet-stream\r\n"); //Le client telecharge le fichier.
+		}
+	}
+	else //pas d'extension.
+		std::strcat(response, "Content-Type: application/octet-stream\r\n"); //Le client telecharge le fichier.
+	std::strcat(response, "\r\n");
+}
+
+void Server::respond(const char *path, int client_socket_fd, int file_size)
+{
+	int response_len = std::strlen(response), total_sent_bytes, total_read_bytes, sent_bytes, read_bytes, i, j;
+
+	//Ouverture du fichier a envoyer:
+	opened_file = open(path, O_RDONLY);
+	if (opened_file < 0)
+	{
+		printf("Error: unable to open %s\n", path);
+        sendErr(comm_socket_fd, "500");
+		return; //error
+	}
+	//Envoi du header.
+	total_sent_bytes = 0;
+	sent_bytes = 1;
+	i = 0;
+	while (total_sent_bytes < response_len && i < TIMEOUT)
+	{
+		 //Envoie du chunk.
+		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0);
+		total_sent_bytes += sent_bytes;
+		++i;
+	}
+	//Envoi du fichier
+printf("RESPOND DEBUG: file_size = %d\n", file_size);
+	read_bytes = 0;
+	total_read_bytes = 0;
+	i = 0;
+	while (total_read_bytes < file_size && i < TIMEOUT)
+	{
+		//Chargement du chunk dans le buffer.
+		read_bytes = read(opened_file, body + total_read_bytes, file_size);
+		j = 0;
+		total_sent_bytes = 0;
+		while (total_sent_bytes < read_bytes && j < TIMEOUT)
+		{
+			sent_bytes = send(client_socket_fd, body + total_read_bytes + total_sent_bytes, file_size, 0); //Envoie du chunk.
+			total_sent_bytes += sent_bytes * (sent_bytes > 0);
+			++j;
+		}
+		total_read_bytes += read_bytes * (read_bytes > 0);
+		++i;
+	}
+printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
+	close(opened_file);
+	opened_file = -1;
+}
+
+std::string generateAutoIndex(const std::string &path)
+{
+	DIR *dir;
+	struct dirent *ent;
+	struct stat st;
+	std::ostringstream oss;
+
+	if ((dir = opendir(path.c_str())) != NULL)
+	{
+		oss << "<html><head><title>Index of " << path << "</title></head><body>";
+		oss << "<h1>Index of " << path << "</h1><ul>";
+		while ((ent = readdir(dir)) != NULL)
+		{
+			std::string fullPath = path + "/" + ent->d_name;
+			stat(fullPath.c_str(), &st);
+			if (S_ISDIR(st.st_mode))
+			{
+				oss << "<li><a href=\"" << ent->d_name << "/\">" << ent->d_name << "/</a></li>";
+			}
+			else
+				oss << "<li><a href=\"" << ent->d_name << "\">" << ent->d_name << "</a></li>";
+		}
+		oss << "</ul></body></html>";
+		closedir(dir);
+	}
+	else
+	{
+		perror("opendir");
+		return ""; // error
+	}
+	return oss.str();
+}
+
+void Server::get_methode(int comm_socket_fd)
+{
+	const char *msg;
+	char body_size[14];
+	int result;
+	struct stat st;
+
+	msg = concatPath();
+	result = stat(path, &st);
+	if (result == 0 && (st.st_mode & S_IFMT) == S_IFDIR && temp.autoindex && dir) //dossier existe && autoindex on
+	{
+		std::string autoIndexPage = generateAutoIndex(path);
+		if (!autoIndexPage.empty())
+		{
+			std::strcat(path, ".html");
+			fillHeader(msg, path, body_size, autoIndexPage.size());
+			int len = std::strlen(response), sent_bytes;
+			int i = 0;
+			int total_sent_bytes; 
+			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
+			{
+				sent_bytes = send(comm_socket_fd, response, len, 0);
+				++i;
+			}
+			len = autoIndexPage.size();
+			i = 0;
+			for (total_sent_bytes = 0; total_sent_bytes < len && i < TIMEOUT; total_sent_bytes += sent_bytes * (sent_bytes > 0))
+			{
+				sent_bytes = send(comm_socket_fd, autoIndexPage.c_str(), autoIndexPage.size(), 0);
+				++i;
+			}
+		}
+		else
+        	sendErr(comm_socket_fd, "500");
+	}
+	else if (result == 0 && (st.st_mode & S_IFMT) == S_IFREG) //fichier existe
+	{
+		fillHeader(msg, path, body_size, st.st_size);
+		respond(path, comm_socket_fd, st.st_size);
+	}
+	else if (stat(temp.index, &st) == 0) //index existe
+	{
+		fillHeader(msg, temp.index, body_size, st.st_size);
+		respond(temp.index, comm_socket_fd, st.st_size);
+	}
+	else //index was a lie.
+		sendErr(comm_socket_fd, "404");
+	dir = 0;
+}
+
+void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_size)
+{
+	const char *msg;
+	int file_fd, file_size, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
+	char body_size[14];
+	struct stat st;
+
+	//Trouver le chemin du fichier.
+	msg = concatPath();
+	//Trouver la taille du fichier.
+	file_size = get_fsize(request, comm_socket_fd);
+	if (file_size < 0)
+		return ;
+	opened_file = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (opened_file < 0)
+    {
+        printf("Error : unable to create %s\n", path);
+        return;
+    }
+	//Recevoir le fichier.
+printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
+	//Ecrire le morceau de body en trop.
+	if (body_chunk_size > 0)
+	{
+		recv_bytes = write(opened_file, header_end, body_chunk_size);
+		if (recv_bytes < 1)
+		{
+			sendErr(comm_socket_fd, "500");
+			return;
+		}
+		file_size -= recv_bytes;
+	}
+	total_recv_bytes = 0;
+	i = 0;
+printf("POST DEBUG file_size = %d\n", file_size);
+	//Chargement du buffer avec recv.
+    while (total_recv_bytes < file_size && i < TIMEOUT)
+    {
+		recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
+		//Ecriture du buffer content avec write()
+		j = 0;
+		total_wrote_bytes = 0;
+		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
+		{
+			wrote_bytes = write(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
+			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
+			++j;
+		}
+		total_recv_bytes += recv_bytes * (recv_bytes > 0);
+		++i;
+    }
+	if (total_recv_bytes < file_size)
+	{
+		sendErr(comm_socket_fd, "500");
+		return;
+	}
+printf("POST DEBUG total_wrote_bytes = %d\n", total_wrote_bytes);
+    close(opened_file);
+	opened_file = -1;
+	send(comm_socket_fd, msg, strlen(msg), 0);
+}
+
+void Server::delete_methode(int comm_socket_fd)
+{
+	char body_size[14], path[PATH_MAX];
+
+	concatPath();
+	if (remove(path) == 0)
+	{
+		// Fichier supprimé avec succès
+		send(comm_socket_fd, OK, strlen(OK), 0);
+	}
+	else
+	{
+		// Échec de la suppression du fichier
+        sendErr(comm_socket_fd, "500");
+	}
+}
+
 ################################################File: ./src/Server.cpp
 #include "Server.h"
 #include "get_post_delete.h"
@@ -1484,8 +1712,10 @@ bool Server::findLongestMatchingPath(const char* location_key, std::map<std::str
 	std::strncpy(current_path, location_key, len);
 	current_path[len] = '\0';
 	char *current_path_end = current_path + len -1; //pointe la fin.
-	loc_len = 0;
+	
+	dir = (*current_path_end == '/');
 
+	loc_len = 0;
 	while (current_path != current_path_end)
 	{
 		std::cout << YELLOW << "DEBUG : loop current_path = " << current_path << RESET << std::endl;
@@ -1545,6 +1775,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			}
 		if (i != MAX_CLIENT)
 			return ;
+		sendErr(comm_socket_fd, "503");
 		close(comm_socket_fd);
 	}
 	/*Communication avec les clients*/
@@ -1779,229 +2010,5 @@ void Server::sendErr(int comm_socket_fd, std::string code)
 	stat(path, &st);
 	fillHeader(http_error_map[code].c_str(), path, body_size, st.st_size);
 	respond(path, comm_socket_fd, st.st_size);
-}
-
-################################################File: ./src/ServerUtils.cpp
-#include "ServerUtils.h"
-
-char* loadFileToBuffer(const char* filename)
-{
-	char *buffer;
-	std::ifstream file(filename, std::ios::binary | std::ios::ate); //Ouvrir en mode binaire et placer le curseur à la fin
-	if (!file)
-	{
-		std::cerr << RED << "Error : Ubnable to open the configuration file." << RESET << std::endl;
-		exit(EXIT_FAILURE);
-	}
-	std::streamsize size = file.tellg(); //Obtenir la taille du fichier
-	file.seekg(0, std::ios::beg); //Revenir au début du fichier
-	buffer = new char[size + 1]; //Allouer le buffer avec un octet supplémentaire pour le caractère nul
-	if (file.read(buffer, size)) //Lire le fichier dans le buffer
-	{
-		buffer[size] = '\0'; //Ajouter le caractère nul à la fin du buffer
-		return buffer;
-	}
-	delete[] buffer;
-	std::cerr << RED << "Error : Configuration read failed." << RESET << std::endl;
-	exit(EXIT_FAILURE);
-}
-
-bool is_valid_port_number(const std::vector<t_token>::iterator &it, int &port)
-{
-	for (size_t i = 0; i < (*it).len; ++i)
-		if (!std::isdigit(*((*it).str + i)))
-			return false;
-	// Convertir la chaîne en entier
-	port = std::atoi((*it).str);
-	// Vérifier si le numéro de port est dans la plage valide (1 à 65535)
-	if (port < 1 || port > 65535)
-		return false;
-	port = htons(port);
-	return true;
-}
-
-uint32_t ftInetAddr(const std::vector<t_token>::iterator &it)
-{
-	const char *ip_address = (*it).str;
-	unsigned long int result = 0;
-	int byte, i;
-
-	for (i = 0; *(ip_address + i) != '\n' && *(ip_address + i); ++i)
-		if (!isdigit(*(ip_address + i)) && *(ip_address + i) != '.')
-			return INADDR_NONE;
-	for (i = 1; *ip_address != '\n' && *ip_address; ++i)
-	{
-		byte = atoi(ip_address);
-		if (byte < 0 || byte > 255)
-			return INADDR_NONE;
-		result += (byte << ((4 - i) * 8));
-		while(*ip_address != '.' && *ip_address != '\n' && *ip_address)
-			++ip_address;
-		if (*ip_address == '.')
-			++ip_address;
-	}
-	return htonl(result);
-}
-
-t_token findType(char *buffer, int *index)
-{
-	t_token token;
-	int len = 0;
-
-	while (*(buffer + len) && *(buffer + len) != '\n' && !std::isspace(static_cast<unsigned char>(*(buffer + len))))
-		++len;
-	(*index) += len;
-	token.str = buffer;
-	token.len = len;
-	if (strncmp(buffer, "server", len) == 0)
-	{
-		token.type = SERVER;
-	}
-	else if (strncmp(buffer, "listen", len) == 0)
-	{
-		token.type = PORT;
-	}
-	else if (strncmp(buffer, "host", len) == 0)
-	{
-		token.type = IP;
-	}
-	else if (strncmp(buffer, "server_name", len) == 0)
-	{
-		token.type = NAME;
-	}
-	else if (strncmp(buffer, "error_page", len) == 0)
-	{
-		token.type = ERR;
-	}
-	else if (strncmp(buffer, "client_max_body_size", len) == 0)
-	{
-		token.type = SIZE;
-	}
-	else if (strncmp(buffer, "location", len) == 0)
-	{
-		token.type = LOC;
-	}
-	else if (strncmp(buffer, "allow_methods", len) == 0)
-	{
-		token.type = METH;
-	}
-	else if (strncmp(buffer, "root", len) == 0)
-	{
-		token.type = ROOT;
-	}
-	else if (strncmp(buffer, "autoindex", len) == 0)
-	{
-		token.type = AUTOINDEX;
-	}
-	else if (strncmp(buffer, "index", len) == 0)
-	{
-		token.type = INDEX;
-	}
-	else if (strncmp(buffer, "cgi_path", len) == 0)
-	{
-		token.type = CGIPATH;
-	}
-	else if (strncmp(buffer, "return", len) == 0)
-	{
-		token.type = RETURN;
-	}
-	else
-		token.type = WORD;
-	return token;
-}
-
-std::vector<t_token> tokenizer(char *buffer)
-{
-	int i = 0;
-
-	std::vector<t_token> token_liste;
-	t_token token;
-
-	while (*(buffer + i))
-	{
-		if (*(buffer + i) == '\n' || std::isspace(static_cast<unsigned char>(*(buffer + i))))
-		{
-			if (*(buffer + i) == '\n')
-			{
-				token.str = NL;
-				token.len = 1;
-				token.type = END;
-				token_liste.push_back(token);
-			}
-			++i;
-		}
-		else if (*(buffer + i))
-		{
-			token = findType(buffer + i, &i);
-			token_liste.push_back(token);
-		}
-	}
-	return token_liste;
-}
-
-bool configErr(const std::vector<t_token>::iterator &it, int line)
-{
-	std::cerr << RED << "Error Config : line " << line << " near ";
-	std::cerr.write((*it).str, (*it).len);
-	std::cerr << RESET << std::endl;
-	return false;
-}
-
-################################################File: ./src/get_post_delete.h
-#ifndef GETPOSTDELETE_H
-#define GETPOSTDELETE_H
-typedef enum {
-    HTML_KEY = 45448,
-    HTM_KEY = 34216,
-    CSS_KEY = 32571,
-    JS_KEY = 23426,
-    JSON_KEY = 46852,
-    XML_KEY = 40440,
-    TXT_KEY = 40832,
-    JPG_KEY = 34026,
-    JPEG_KEY = 44732,
-    PNG_KEY = 36400,
-    GIF_KEY = 31930,
-    SVG_KEY = 38640,
-    ICO_KEY = 33075,
-    PDF_KEY = 35168,
-    ZIP_KEY = 41358,
-    MP4_KEY = 29757,
-    WEBM_KEY = 50813,
-    MP3_KEY = 29648,
-    WAV_KEY = 39746
-} FileExtensionKey;
-
-typedef enum {
-    GET = 'G' + 'E',
-	POST = 'P' + 'O',
-	DELETE = 'D' + 'E',
-} MethodType;
-
-#endif
-
-################################################File: ./src/main.cpp
-#include "Server.h"
-
-void signalHandler(int signum)
-{
-	if (serverInstance)
-	{
-		delete serverInstance;
-		serverInstance = NULL;
-	}	
-	exit(signum);
-}
-
-int main(void)
-{
-	serverInstance = NULL;
-	signal(SIGINT, signalHandler);  // gere Ctrl+C.
-	signal(SIGTERM, signalHandler); // gere termination request.
-	signal(SIGSEGV, signalHandler); // gere segmentation fault.
-	serverInstance = new Server();
-	serverInstance->run();
-	delete serverInstance;
-	return EXIT_SUCCESS;
 }
 
