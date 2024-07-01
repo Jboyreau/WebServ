@@ -357,13 +357,22 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			std::cout << RED << "Methode key :" << methode_key << RESET <<std::endl;
 			if (test_php)
 			{
-				methode_CGI(header_end, body_chunk_size);
-				std::cout << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
-				close(comm_socket_fd);
-				*(fds_buffer + i) = -1;
-				std::cout << GREEN << "Communication socket closed" << RESET << std::endl;
-				return;
-			}
+				if (temp.method_map.find(methode_key) != temp.method_map.end())
+				{
+					methode_CGI(header_end, body_chunk_size, methode_key);
+					std::cout << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
+					close(comm_socket_fd);
+					*(fds_buffer + i) = -1;
+					std::cout << GREEN << "Communication socket closed" << RESET << std::endl;
+					return;				
+				}
+				else
+				{
+					std::cout << RED << "GET not allowed" << RESET << std::endl;//send error method not allowed
+					sendErr(comm_socket_fd, "403"); //error
+				}
+					
+				}
 			switch (*request + *(request + 1))
 			{
 				case GET :

@@ -61,11 +61,10 @@ std::string int_to_string(int nb)
     return str; // Add this line to return the string
 }
 
-void Server::exec_CGI(char *request, const char *path,int size_body, std::string methode)
+void Server::exec_CGI(char *request, const std::string scriptPath, int size_body, std::string &methode)
 {
-    static const char *args[] = { "/usr/bin/php-cgi", path, NULL };
+    static const char *args[] = { "/usr/bin/php-cgi", scriptPath.c_str(), NULL };
 	
-	std::string scriptPath = path;
 	std::vector<std::string> env;
 	std::vector<char*> CGIEnv;
 	std::string request_string = request;
@@ -118,21 +117,16 @@ bool set_up_CGI_file(char *CGIbodypath)
 }
 
 
-int Server::manage_CGI(char *request, char *scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size)
+int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size, std::string &methode)
 {
     pid_t pid;
  	int cgi_input[2];
     int cgi_output[2];
-    int file_fd, file_size, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
+    int file_fd, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
 
-    
-    file_size = get_fsize(request, comm_socket_fd);
-    std::string methode;
-    for (int i = 0; request[i] != ' '; i++)
-    {
-        methode += request[i];
-    }
-	
+    int file_size = 0;
+    if (methode == "POST")
+        file_size = get_fsize(request, comm_socket_fd);
 	pipe(cgi_input);
     pipe(cgi_output);
 	pid = fork();
@@ -265,18 +259,14 @@ void Server::fill_header_cgi(char *body_size)
     strncat(response, body, header_size);
 }
 
-static void feed_path(char *request, char *path)
+void Server::clean_path(std::string &request)
 {
-    int i, j = 1;
+    int i = 0; 
+    int j = 0;
 
-    *path = '.';
-    // Find the start of the path in the request
-    for (i = 0; *(request + i) != '\n' && *(request + i) != ' ' && *(request + i); ++i)
-        ;
-    // Extract the path from the request until space, newline or ?
-    for (; *(request + i + j) != '\n' && *(request + i + j) != ' ' && *(request + i + j) != '?' && *(request + i + j); ++j)
-        *(path + j) = *(request + i + j);
-    *(path + j) = 0;
+    for (; *(path + i + j) != '\n' && *(path + i + j) != ' ' && *(path + i + j) != '?' && *(path + i + j); ++j)
+        request += *(path + i + j);
+    request += "\0";
 
     printf("FIND PATH DEBUG! EXTRACTED PATH = %s\n", path);
 }
@@ -314,20 +304,26 @@ printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
 }
 
 
-void Server::methode_CGI(char *header_end, int body_chunk_size)
+void Server::methode_CGI(char *header_end, int body_chunk_size, std::string &methode)
 {
-	char body_size[14], scriptPath[PATH_MAX];
+	char body_size[14];
 	char CGIBodyPath[] = "./cgibody";
+    std::string scriptPath;
 
 	struct stat st;
 /*1.Parsing du file path*/
-	feed_path(request, scriptPath);
-    if (stat(scriptPath, &st) == -1)
+    const char *msg = concatPath();
+    if ((*request + *(request + 1)) == GET)
+        clean_path(scriptPath);
+    else
+        scriptPath = path;
+       std::cout << GREEN << "%%%%%%%%%%%%%%%%%%%%%% scriptPath:  " << scriptPath << "\npath : "<< path  << RESET << std::endl;
+    if (stat(scriptPath.c_str(), &st) == -1)
     {
         sendErr(comm_socket_fd,"404");
         return;
     }
-	int fd_cgi = manage_CGI(request, scriptPath, CGIBodyPath, header_end, body_chunk_size);
+	int fd_cgi = manage_CGI(request, scriptPath, CGIBodyPath, header_end, body_chunk_size, methode);
     if (fd_cgi == -1)
         return;
     fillBody(fd_cgi);
