@@ -19,6 +19,7 @@ Server::Server(void)
 	opt = 1;
 	http_error_map["403"] = H403;
 	http_error_map["404"] = H404;
+	http_error_map["405"] = H405;
 	http_error_map["411"] = H411;
 	http_error_map["413"] = H413;
 	http_error_map["500"] = H500;
@@ -272,12 +273,13 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 							conf = cnf[cnf[j].name_map[name]];
 							break;
 						}
-					for (j = 0; j < cnf_len; ++j)
-						if (*(virtual_servers[j]) == master_sock_tcp_fd)
-						{
-							conf = cnf[cnf[j].name_map[name]];
-							break;
-						}
+					if (cnf_len == j)
+						for (j = 0; j < cnf_len; ++j)
+							if (*(virtual_servers[j]) == master_sock_tcp_fd)
+							{
+								conf = cnf[cnf[j].name_map[name]];
+								break;
+							}
 					std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;
 				}
 			}
@@ -369,7 +371,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				else
 				{
 					std::cout << RED << "GET not allowed" << RESET << std::endl;//send error method not allowed
-					sendErr(comm_socket_fd, "403"); //error
+					sendErr(comm_socket_fd, "405"); //error
 				}
 					
 				}
@@ -385,7 +387,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 						else
 						{
 							std::cout << RED << "GET not allowed" << RESET << std::endl;//send error method not allowed
-							sendErr(comm_socket_fd, "403"); //error
+							sendErr(comm_socket_fd, "405"); //error
 						}
 					}	
 					break;
@@ -397,7 +399,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 					else
 					{
 						std::cout << RED << "POST not allowed" << RESET << std::endl;//send error method not allowed
-						sendErr(comm_socket_fd, "403"); //error
+						sendErr(comm_socket_fd, "405"); //error
 					}
 					break;
 				case DELETE :
@@ -408,7 +410,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 					else
 					{
 						std::cout << RED << "DELETE not allowed" << std::endl;//send error method not allowed
-						sendErr(comm_socket_fd, "403"); //error
+						sendErr(comm_socket_fd, "405"); //error
 					}
 					break;
 				default :

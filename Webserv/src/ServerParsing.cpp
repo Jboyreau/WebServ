@@ -56,6 +56,7 @@ bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>:
 	(*(cnf + server_index)).error_map["413"] = E413;
 	(*(cnf + server_index)).error_map["403"] = E403;
 	(*(cnf + server_index)).error_map["404"] = E404;
+	(*(cnf + server_index)).error_map["405"] = E405;
 	(*(cnf + server_index)).error_map["500"] = E500;
 	(*(cnf + server_index)).error_map["502"] = E502;
 	(*(cnf + server_index)).error_map["503"] = E503;
