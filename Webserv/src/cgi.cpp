@@ -61,7 +61,7 @@ std::string int_to_string(int nb)
     return str; // Add this line to return the string
 }
 
-void exec_CGI(char *request, const char *path,int size_body)
+void Server::exec_CGI(char *request, const char *path,int size_body, std::string methode)
 {
     static const char *args[] = { "/usr/bin/php-cgi", path, NULL };
 	
@@ -70,7 +70,7 @@ void exec_CGI(char *request, const char *path,int size_body)
 	std::vector<char*> CGIEnv;
 	std::string request_string = request;
 	std::string stg_sizebody = int_to_string(size_body);
-	std::string methode = strtok(request," ");
+	
 	//path = "/CGI/script.php?name=nassim&id=325435435";
 
  	env.push_back("REQUEST_METHOD=" + methode);
@@ -117,27 +117,6 @@ bool set_up_CGI_file(char *CGIbodypath)
 	return true;
 }
 
-char* get_http_body( char* request) {
-    // Trouver le début du corps de la requête (séparateur \r\n\r\n)
-	std::cout << RED << "\n####REQUEST CONTENT####:\n" << request << RESET << std::endl;
-	int indice_body = indice_body_request(&request);
-	//printf("AAAAAAAAAAAA\n%s\n\n",request);
-    // Calculer la taille du corps de la requête
-    size_t body_length = strlen(request + indice_body);
-
-    // Allouer de la mémoire pour le corps
-    char* body = (char*)malloc(body_length + 1);
-    if (body == NULL) {
-        perror("malloc failed\n\n");
-        return NULL;
-    }
-
-    // Copier le corps de la requête dans le buffer alloué
-    strcpy(body, request + indice_body);
-	body[body_length - 1] = 0;
-
-    return body;
-}
 
 int Server::manage_CGI(char *request, char *scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size)
 {
@@ -146,8 +125,14 @@ int Server::manage_CGI(char *request, char *scriptPath, char *CGIbodypath, char 
     int cgi_output[2];
     int file_fd, file_size, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
 
+    
     file_size = get_fsize(request, comm_socket_fd);
-	char*  body = get_http_body(request);
+    std::string methode;
+    for (int i = 0; request[i] != ' '; i++)
+    {
+        methode += request[i];
+    }
+	
 	pipe(cgi_input);
     pipe(cgi_output);
 	pid = fork();
@@ -164,15 +149,17 @@ int Server::manage_CGI(char *request, char *scriptPath, char *CGIbodypath, char 
         close(cgi_output[1]);
         close(cgi_input[0]);
         close(cgi_input[1]);
-		exec_CGI(request,scriptPath,strlen(body));
+		exec_CGI(request,scriptPath,file_size, methode);
 	    exit(EXIT_FAILURE);
     }
     else
     {
         close(cgi_output[1]);
 		close(cgi_input[0]);
+        if (methode == "POST")
+        {
         if (body_chunk_size > 0)
-	{
+	    {
 		recv_bytes = write(cgi_input[1], header_end, body_chunk_size);
 		if (recv_bytes < 1)
 		{
@@ -207,10 +194,12 @@ int Server::manage_CGI(char *request, char *scriptPath, char *CGIbodypath, char 
 		sendErr(comm_socket_fd, "500");
 		return -1;
 	}
+        }
      
         close(cgi_input[1]);
 
         int status;
+        
         waitpid(pid, &status, 0);
     }
 	return cgi_output[0];
