@@ -18,24 +18,20 @@ server
 		allow_methods GET DELETE
 		root ./media/
 		autoindex on
-		index ./default/index.html
-	location /cgi/
-		allow_methods GET POST
-		root ./cgi/
-		index ./default/index.html
-		cgi_path ./cgi/php-cgi
+		index ./default/index.html	
 	location /upload/
 		allow_methods POST DELETE
 		root ./upload/
 	location /www/
 		allow_methods POST GET DELETE
 		root ./www/
+		cgi_path /usr/bin/php-cgi
 	location /old-page/
 		allow_methods GET
 		root ./new-page/
 		autoindex on
 		index ./default/index.html
-		cgi_path ./cgi/php-cgi
+		cgi_path /usr/bin/php-cgi
 		return /new-page/
 server
 	listen 2000
@@ -59,10 +55,6 @@ server
 		allow_methods GET
 		root ./media/
 		autoindex off
-	location /cgi/
-		allow_methods GET POST
-		root ./cgi/
-		cgi_path ./cgi/php-cgi
 	location /upload/
 		allow_methods POST DELETE
 		root ./upload/

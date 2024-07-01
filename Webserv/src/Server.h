@@ -41,7 +41,7 @@
 #define MAX_SERVER_NAME_LEN 253
 #define CNF_PATH "./config/config.txt"
 #define DEFAULT_INDEX_PATH "./default/default.html"
-#define DEFAULT_CGI_PATH "./cgi/php-cgi"
+#define DEFAULT_CGI_PATH "/usr/bin/php-cgi"
 #define DEFAULT_ROOT "./"
 #define RED "\033[1;31m" //Error
 #define YELLOW "\033[1;33m" //Debug
@@ -144,6 +144,7 @@ class Server
 		void setNonBlocking(int socket);
 		bool canAccessDirectory(const char *path);
 		bool canAccessFile(const char *path, int flag);
+		int handleChunk(int fd, char *buff, size_t len);
 		//TEMP
 		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
 		void respond(const char *path, int client_socket_fd, int file_size);
@@ -165,6 +166,7 @@ class Server
 		void respond_cgi();
 		int  manage_CGI(char *request, std::string scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size, std::string &methode);
 		void clean_path(std::string &request);
+	
 
 };
 
