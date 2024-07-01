@@ -27,6 +27,9 @@ server
 	location /upload/
 		allow_methods POST DELETE
 		root ./upload/
+	location /www/
+		allow_methods POST GET DELETE
+		root ./www/
 	location /old-page/
 		allow_methods GET
 		root ./new-page/
