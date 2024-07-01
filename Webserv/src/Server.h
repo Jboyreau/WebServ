@@ -155,6 +155,7 @@ class Server
 		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
 		//CGI
 		void methode_CGI(char *header_end, int body_chunk_size);
+		void exec_CGI(char *request, const char *path,int size_body, std::string methode);
 		void respond_cgi(char* header, char *body_cgi, int client_socket_fd, int file_size);
 		void readFromFileDescriptor(int fd_file, int *readbytes);
 		void fillBody(int fd_file);
