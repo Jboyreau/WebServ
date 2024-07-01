@@ -32,7 +32,6 @@ Server::~Server(void)
 {
 	if (body)
 		delete[] body;
-
 	// Fermer tous les descripteurs de fichiers clients et maîtres
 	for (server_index = 0; server_index < MAX_VSERVER; ++server_index)
 	{
