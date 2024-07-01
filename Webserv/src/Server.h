@@ -90,6 +90,7 @@ class Server
 	private:
 		std::map<std::string, std::string> http_error_map;
 		std::string location_key;
+		std::string location_key2;
 		t_config cnf[MAX_VSERVER];
 		t_config conf;
 		t_location temp;
@@ -111,6 +112,9 @@ class Server
 		int loc_len;
 		int opened_file;
 		bool dir;
+		bool test_php;
+		size_t header_size;
+		size_t size_body;
 	public:
 		Server(void);
 		~Server(void);
@@ -149,6 +153,14 @@ class Server
 		void sendErr(int comm_socket_fd, std::string code);
 		int get_fsize(char *request, int comm_socket_fd);
 		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
+		//CGI
+		void methode_CGI(char *header_end, int body_chunk_size);
+		void respond_cgi(char* header, char *body_cgi, int client_socket_fd, int file_size);
+		void readFromFileDescriptor(int fd_file, int *readbytes);
+		void fillBody(int fd_file);
+		void fill_header_cgi(char *body_size);
+		void respond_cgi();
+		int  manage_CGI(char *request, char *scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size);
 };
 
 extern Server* serverInstance; // Pointeur global

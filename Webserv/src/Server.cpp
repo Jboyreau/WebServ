@@ -160,6 +160,10 @@ bool Server::findLongestMatchingPath(const char* location_key, std::map<std::str
 	char *current_path_end = current_path + len -1; //pointe la fin.
 	
 	dir = (*current_path_end == '/');
+	test_php = (std::strstr(location_key2.c_str(), ".php ") || std::strstr(location_key2.c_str(), ".php?"));
+
+	std::cout << YELLOW << "$$$$$$$$ location.key $$$$$$$$\n" << location_key << RESET << std::endl;
+	std::cout << YELLOW << "$$$$$$$$ test_php $$$$$$$$\n" << test_php << RESET << std::endl;
 
 	loc_len = 0;
 	while (current_path != current_path_end)
@@ -299,6 +303,8 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				++loc_len;
 			std::string lk(ptr, loc_len);
 			location_key = lk;
+			std::string lk2(ptr, loc_len + 1);
+			location_key2 = lk2;
 			//Trouver la bonne location.
 			if (conf.location_map.size() != 0)
 			{
@@ -349,6 +355,15 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				;
 			std::string methode_key(request, methode_len);
 			std::cout << RED << "Methode key :" << methode_key << RESET <<std::endl;
+			if (test_php)
+			{
+				methode_CGI(header_end, body_chunk_size);
+				std::cout << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
+				close(comm_socket_fd);
+				*(fds_buffer + i) = -1;
+				std::cout << GREEN << "Communication socket closed" << RESET << std::endl;
+				return;
+			}
 			switch (*request + *(request + 1))
 			{
 				case GET :
