@@ -2,7 +2,7 @@
 #include <limits.h> //PATH_MAX
 #include <stdlib.h> //
 #include <stdio.h> //
-#include <unistd.h> //read(); write();
+#include <unistd.h> //read(); handleChunk();
 #include <fcntl.h> ///open()
 #include <sys/types.h> //send();
 #include <sys/socket.h> //send();
@@ -63,8 +63,9 @@ std::string int_to_string(int nb)
 
 void Server::exec_CGI(char *request, const std::string scriptPath, int size_body, std::string &methode)
 {
-    static const char *args[] = { "/usr/bin/php-cgi", scriptPath.c_str(), NULL };
+    static const char *args[] = { temp.cgi_path, scriptPath.c_str(), NULL };
 	
+    //"/usr/bin/php-cgi"
 	std::vector<std::string> env;
 	std::vector<char*> CGIEnv;
 	std::string request_string = request;
@@ -154,7 +155,7 @@ int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath,
         {
         if (body_chunk_size > 0)
 	    {
-		recv_bytes = write(cgi_input[1], header_end, body_chunk_size);
+		recv_bytes = handleChunk(cgi_input[1], header_end, body_chunk_size);
 		if (recv_bytes < 1)
 		{
             std::cout << "1" << std::endl;
@@ -170,12 +171,12 @@ int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath,
     while (total_recv_bytes < file_size && i < TIMEOUT)
     {
 		recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
-		//Ecriture du buffer content avec write()
+		//Ecriture du buffer content avec handleChunk()
 		j = 0;
 		total_wrote_bytes = 0;
 		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
 		{
-			wrote_bytes = write(cgi_input[1], body + total_recv_bytes + total_wrote_bytes, recv_bytes);
+			wrote_bytes = handleChunk(cgi_input[1], body + total_recv_bytes + total_wrote_bytes, recv_bytes);
 			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
 			++j;
 		}

@@ -326,7 +326,7 @@ printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
 	//Ecrire le morceau de body en trop.
 	if (body_chunk_size > 0)
 	{
-		recv_bytes = write(opened_file, header_end, body_chunk_size);
+		recv_bytes = handleChunk(opened_file, header_end, body_chunk_size);
 		if (recv_bytes < 1)
 		{
 			sendErr(comm_socket_fd, "500");
@@ -346,7 +346,7 @@ printf("POST DEBUG file_size = %d\n", file_size);
 		total_wrote_bytes = 0;
 		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
 		{
-			wrote_bytes = write(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
+			wrote_bytes = handleChunk(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
 			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
 			++j;
 		}
