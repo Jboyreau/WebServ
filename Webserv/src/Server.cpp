@@ -272,12 +272,13 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 							conf = cnf[cnf[j].name_map[name]];
 							break;
 						}
-					for (j = 0; j < cnf_len; ++j)
-						if (*(virtual_servers[j]) == master_sock_tcp_fd)
-						{
-							conf = cnf[cnf[j].name_map[name]];
-							break;
-						}
+					if (cnf_len == j)
+						for (j = 0; j < cnf_len; ++j)
+							if (*(virtual_servers[j]) == master_sock_tcp_fd)
+							{
+								conf = cnf[cnf[j].name_map[name]];
+								break;
+							}
 					std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;
 				}
 			}
