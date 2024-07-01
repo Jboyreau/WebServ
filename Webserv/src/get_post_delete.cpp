@@ -247,7 +247,7 @@ std::string generateAutoIndex(const std::string &path)
 	else
 	{
 		perror("opendir");
-		return ""; // error
+		return "";
 	}
 	return oss.str();
 }
