@@ -144,7 +144,6 @@ class Server
 		void setNonBlocking(int socket);
 		bool canAccessDirectory(const char *path);
 		bool canAccessFile(const char *path, int flag);
-		int handleChunk(int fd, char *buff, size_t len);
 		//TEMP
 		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
 		void respond(const char *path, int client_socket_fd, int file_size);
@@ -166,8 +165,6 @@ class Server
 		void respond_cgi();
 		int  manage_CGI(char *request, std::string scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size, std::string &methode);
 		void clean_path(std::string &request);
-	
-
 };
 
 extern Server* serverInstance; // Pointeur global

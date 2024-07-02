@@ -2,7 +2,7 @@
 #include <limits.h> //PATH_MAX
 #include <stdlib.h> //
 #include <stdio.h> //
-#include <unistd.h> //read(); handleChunk();
+#include <unistd.h> 
 #include <fcntl.h> ///open()
 #include <sys/types.h> //send();
 #include <sys/socket.h> //send();
@@ -147,56 +147,56 @@ int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath,
 		exec_CGI(request,scriptPath,file_size, methode);
 	    exit(EXIT_FAILURE);
     }
-    else
-    {
-        close(cgi_output[1]);
-		close(cgi_input[0]);
-        if (methode == "POST")
-        {
-        if (body_chunk_size > 0)
-	    {
-		recv_bytes = handleChunk(cgi_input[1], header_end, body_chunk_size);
-		if (recv_bytes < 1)
-		{
-            std::cout << "1" << std::endl;
-			sendErr(comm_socket_fd, "500");
-			return -1;
-		}
-		file_size -= recv_bytes;
-	}
-    	total_recv_bytes = 0;
-	i = 0;
-    printf("POST DEBUG file_size = %d\n", file_size);
-	//Chargement du buffer avec recv.
-    while (total_recv_bytes < file_size && i < TIMEOUT)
-    {
-		recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
-		//Ecriture du buffer content avec handleChunk()
-		j = 0;
-		total_wrote_bytes = 0;
-		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
-		{
-			wrote_bytes = handleChunk(cgi_input[1], body + total_recv_bytes + total_wrote_bytes, recv_bytes);
-			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
-			++j;
-		}
-		total_recv_bytes += recv_bytes * (recv_bytes > 0);
-		++i;
-    }
-	if (total_recv_bytes < file_size)
+	else
 	{
-        std::cout << "2" << std::endl;
-		sendErr(comm_socket_fd, "500");
-		return -1;
-	}
-        }
-     
-        close(cgi_input[1]);
+		close(cgi_output[1]);
+		close(cgi_input[0]);
+		if (methode == "POST")
+		{
+			for (int k = 0; k < body_chunk_size ; ++k)
+				*(body + k) = *(header_end + k);
+			total_recv_bytes = 0;
+			i = 0;
+			printf("POST DEBUG file_size = %d\n", file_size);
+			//Chargement du buffer avec recv.
+			bool b = false;
+			while (total_recv_bytes < file_size && i < TIMEOUT)
+			{
+				if (b)
+				{
+					recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
+				}
+				else
+				{
+					recv_bytes = body_chunk_size;
+					b = true;
+				}
+				//Ecriture du buffer content.
+				j = 0;
+				total_wrote_bytes = 0;
+				while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
+				{
+					wrote_bytes = write(cgi_input[1], body + total_recv_bytes + total_wrote_bytes, recv_bytes);
+					total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
+					++j;
+				}
+				total_recv_bytes += recv_bytes * (recv_bytes > 0);
+				++i;
+			}
+			if (total_recv_bytes < file_size)
+			{
+				std::cout << "2" << std::endl;
+				sendErr(comm_socket_fd, "500");
+				return -1;
+			}
+		}
 
-        int status;
-        
-        waitpid(pid, &status, 0);
-    }
+		close(cgi_input[1]);
+
+		int status;
+
+		waitpid(pid, &status, 0);
+	}
 	return cgi_output[0];
 
 }

@@ -482,8 +482,3 @@ void Server::sendErr(int comm_socket_fd, std::string code)
 	fillHeader(http_error_map[code].c_str(), path, body_size, st.st_size);
 	respond(path, comm_socket_fd, st.st_size);
 }
-
-int Server::handleChunk(int fd, char *buff, size_t len)
-{
-	return write(fd, buff, len);
-}

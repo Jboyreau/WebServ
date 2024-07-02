@@ -2,7 +2,7 @@
 #include <limits.h> //PATH_MAX
 #include <stdlib.h> //
 #include <stdio.h> //
-#include <unistd.h> //read(); write();
+#include <unistd.h> 
 #include <fcntl.h> ///open()
 #include <sys/types.h> //send();
 #include <sys/socket.h> //send();
@@ -323,42 +323,44 @@ void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_s
     }
 	//Recevoir le fichier.
 printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
+printf("POST DEBUG file_size = %d\n", file_size);
 	//Ecrire le morceau de body en trop.
-	if (body_chunk_size > 0)
-	{
-		recv_bytes = handleChunk(opened_file, header_end, body_chunk_size);
-		if (recv_bytes < 1)
-		{
-			sendErr(comm_socket_fd, "500");
-			return;
-		}
-		file_size -= recv_bytes;
-	}
+	for (int k = 0; k < body_chunk_size; ++k)
+		*(body + k) = *(header_end + k);
 	total_recv_bytes = 0;
 	i = 0;
-printf("POST DEBUG file_size = %d\n", file_size);
+	bool b = false;
 	//Chargement du buffer avec recv.
     while (total_recv_bytes < file_size && i < TIMEOUT)
     {
-		recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
-		//Ecriture du buffer content avec write()
+		if (b)
+		{
+			recv_bytes = recv(comm_socket_fd, body + total_recv_bytes, file_size, 0);
+		}
+		else
+		{
+			recv_bytes = body_chunk_size;
+			b = true;
+		}
+		//Ecriture du buffer content.
 		j = 0;
 		total_wrote_bytes = 0;
 		while (total_wrote_bytes < recv_bytes && j < TIMEOUT)
 		{
-			wrote_bytes = handleChunk(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
+			wrote_bytes = write(opened_file, body + total_recv_bytes + total_wrote_bytes, recv_bytes);
 			total_wrote_bytes += wrote_bytes * (wrote_bytes > 0);
-			++j;
+				++j;
 		}
 		total_recv_bytes += recv_bytes * (recv_bytes > 0);
 		++i;
     }
 	if (total_recv_bytes < file_size)
 	{
+		printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
 		sendErr(comm_socket_fd, "500");
 		return;
 	}
-printf("POST DEBUG total_wrote_bytes = %d\n", total_wrote_bytes);
+printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
     close(opened_file);
 	opened_file = -1;
 	send(comm_socket_fd, msg, strlen(msg), 0);
