@@ -17,6 +17,13 @@ Server::Server(void)
 	timeout.tv_sec = SELECT_TIMEOUT_SEC;
 	timeout.tv_usec = SELECT_TIMEOUT_USEC;
 	opt = 1;
+	directory = NULL;
+	opened_file = -1;
+	cgi_input[0] = -1;
+	cgi_input[1] = -1;
+	cgi_output[0] = -1;
+	cgi_output[1] = -1;
+	http_error_map["400"] = H400;
 	http_error_map["403"] = H403;
 	http_error_map["404"] = H404;
 	http_error_map["405"] = H405;
@@ -26,6 +33,8 @@ Server::Server(void)
 	http_error_map["502"] = H502;
 	http_error_map["503"] = H503;
 	http_error_map["504"] = H504;
+	for (server_index = 0; server_index < MAX_VSERVER; ++server_index)
+		virtual_servers[server_index] = NULL;
 }
 
 Server::~Server(void)
@@ -47,8 +56,12 @@ Server::~Server(void)
 			delete[] virtual_servers[server_index];
 		}
 	}
+	closePipe(cgi_input);
+	closePipe(cgi_output);
 	if (opened_file != -1)
 		close(opened_file);
+	if (directory != NULL)
+		closedir(directory);
 }
 
 void Server::run(void)
@@ -196,11 +209,10 @@ bool Server::findLongestMatchingPath(const char* location_key, std::map<std::str
 
 void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 {
-	int i;
-
 	/*Accepter la demande de connection*/
 	if (FD_ISSET(master_sock_tcp_fd, &readfds))
 	{
+		int i;
 		//accept() renvoie un nouveau fd temporaire permettant d'identifier le client.
 		if ((comm_socket_fd = accept(master_sock_tcp_fd, (struct sockaddr *)&client_addr, &addr_len)) < 0)
 		{
@@ -224,9 +236,9 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				break ;
 			}
 		if (i != MAX_CLIENT)
-			return ;
-		sendErr(comm_socket_fd, "503");
-		close(comm_socket_fd);
+			return ;	
+		//sendErr(comm_socket_fd, "503");
+		//close(comm_socket_fd);
 	}
 	/*Communication avec les clients*/
 	for (int i = 1; i < MAX_CLIENT + 1; ++i)
@@ -252,6 +264,29 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				header_end = std::strstr(request, "\r\n\r\n");
 				total_recv_bytes += recv_bytes * (recv_bytes > 0);
 				++time_cout;
+			}	
+			if (total_recv_bytes == 0)
+			{
+				std::cout << GREEN << "Communication ended by EMPTY MESSAGE with Client" << comm_socket_fd << RESET << std::endl;
+				close(comm_socket_fd);
+				*(fds_buffer + i) = -1;
+				break;
+			}
+			if (time_cout >= TIMEOUT)
+			{
+				std::cout << RED << "Error : recv header failed."<< RESET << std::endl;
+				sendErr(comm_socket_fd, "500");
+				close(comm_socket_fd);
+				*(fds_buffer + i) = -1;
+				break;
+			}
+			if (header_end == NULL)
+			{
+				std::cout << RED << "Error : wrong header."<< RESET << std::endl;
+				sendErr(comm_socket_fd, "400");
+				close(comm_socket_fd);
+				*(fds_buffer + i) = -1;
+				break;			
 			}
 			//Trouver la bonne config suivant le nom.	
 			char *ptr = NULL;
@@ -287,13 +322,6 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			int body_chunk_size = total_recv_bytes - (header_end - request);
 			std::cout << GREEN << "Recvd bytes = " << total_recv_bytes << " from client " << comm_socket_fd << RESET << std::endl;
 			std::cout << YELLOW << "\n####REQUEST CONTENT####:\n" << request << RESET << std::endl;
-			if (total_recv_bytes == 0 || recv_bytes < 0)
-			{
-				std::cout << GREEN << "Communication ended by EMPTY MESSAGE with Client" << comm_socket_fd << RESET << std::endl;
-				close(comm_socket_fd);
-				*(fds_buffer + i) = -1;
-				break;
-			}
 			//Trouver le path.
 			int loc_len = 0;
 			int j;
@@ -369,7 +397,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				}
 				else
 				{
-					std::cout << RED << "GET not allowed" << RESET << std::endl;//send error method not allowed
+					std::cout << RED << "Error : GET not allowed" << RESET << std::endl;//send error method not allowed
 					sendErr(comm_socket_fd, "405"); //error
 				}
 					
@@ -385,7 +413,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 						}
 						else
 						{
-							std::cout << RED << "GET not allowed" << RESET << std::endl;//send error method not allowed
+							std::cout << RED << "Error : GET not allowed" << RESET << std::endl;//send error method not allowed
 							sendErr(comm_socket_fd, "405"); //error
 						}
 					}	
@@ -397,7 +425,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 					}
 					else
 					{
-						std::cout << RED << "POST not allowed" << RESET << std::endl;//send error method not allowed
+						std::cout << RED << "Error : POST not allowed" << RESET << std::endl;//send error method not allowed
 						sendErr(comm_socket_fd, "405"); //error
 					}
 					break;
@@ -408,13 +436,13 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 					}
 					else
 					{
-						std::cout << RED << "DELETE not allowed" << std::endl;//send error method not allowed
+						std::cout << RED << "Error : DELETE not allowed" << std::endl;//send error method not allowed
 						sendErr(comm_socket_fd, "405"); //error
 					}
 					break;
 				default :
-					std::cout << RED << "NOOB not allowed" << RESET << std::endl;//send error method not handeled
-					sendErr(comm_socket_fd, "503"); //error
+					std::cout << RED << "Error : unknown methode" << RESET << std::endl;//send error method not handeled
+					sendErr(comm_socket_fd, "405"); //error
 			}
 			std::cout << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
 			close(comm_socket_fd);
@@ -481,4 +509,16 @@ void Server::sendErr(int comm_socket_fd, std::string code)
 	stat(path, &st);
 	fillHeader(http_error_map[code].c_str(), path, body_size, st.st_size);
 	respond(path, comm_socket_fd, st.st_size);
+}
+
+void Server::closePipe(int *pipe)
+{
+	for (int i = 0; i < 2; ++i)
+	{
+		if (pipe[i] != -1)
+		{
+			close(pipe[i]);
+			pipe[i] = -1;
+		}
+	}
 }

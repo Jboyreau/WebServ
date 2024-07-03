@@ -180,7 +180,10 @@ void Server::respond(const char *path, int client_socket_fd, int file_size)
 	if (opened_file < 0)
 	{
 		printf("Error: unable to open %s\n", path);
-        sendErr(comm_socket_fd, "500");
+		if (errno == EACCES)
+			sendErr(comm_socket_fd, "403");
+		else
+			sendErr(comm_socket_fd, "500");
 		return; //error
 	}
 	//Envoi du header.
@@ -189,13 +192,13 @@ void Server::respond(const char *path, int client_socket_fd, int file_size)
 	i = 0;
 	while (total_sent_bytes < response_len && i < TIMEOUT)
 	{
-		 //Envoie du chunk.
+		//Envoie du chunk.
 		sent_bytes = send(client_socket_fd, response + total_sent_bytes, response_len - total_sent_bytes, 0);
 		total_sent_bytes += sent_bytes;
 		++i;
 	}
 	//Envoi du fichier
-printf("RESPOND DEBUG: file_size = %d\n", file_size);
+	printf("RESPOND DEBUG: file_size = %d\n", file_size);
 	read_bytes = 0;
 	total_read_bytes = 0;
 	i = 0;
@@ -214,23 +217,30 @@ printf("RESPOND DEBUG: file_size = %d\n", file_size);
 		total_read_bytes += read_bytes * (read_bytes > 0);
 		++i;
 	}
-printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
+	if (total_read_bytes < file_size)
+	{
+		sendErr(comm_socket_fd, "500");
+		close(opened_file);
+		opened_file = -1;
+		return;
+	}
+	printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
 	close(opened_file);
 	opened_file = -1;
 }
 
-std::string generateAutoIndex(const std::string &path)
+std::string Server::generateAutoIndex(const std::string &path)
 {
-	DIR *dir;
 	struct dirent *ent;
 	struct stat st;
 	std::ostringstream oss;
 
-	if ((dir = opendir(path.c_str())) != NULL)
+	directory = NULL;
+	if ((directory = opendir(path.c_str())) != NULL)
 	{
 		oss << "<html><head><title>Index of " << path << "</title></head><body>";
 		oss << "<h1>Index of " << path << "</h1><ul>";
-		while ((ent = readdir(dir)) != NULL)
+		while ((ent = readdir(directory)) != NULL)
 		{
 			std::string fullPath = path + "/" + ent->d_name;
 			stat(fullPath.c_str(), &st);
@@ -242,7 +252,8 @@ std::string generateAutoIndex(const std::string &path)
 				oss << "<li><a href=\"" << ent->d_name << "\">" << ent->d_name << "</a></li>";
 		}
 		oss << "</ul></body></html>";
-		closedir(dir);
+		closedir(directory);
+		directory = NULL;
 	}
 	else
 	{
@@ -318,6 +329,10 @@ void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_s
 	opened_file = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
     if (opened_file < 0)
     {
+		if (errno == EACCES)
+			sendErr(comm_socket_fd, "403");
+		else
+			sendErr(comm_socket_fd, "500");
         printf("Error : unable to create %s\n", path);
         return;
     }
@@ -358,6 +373,8 @@ printf("POST DEBUG file_size = %d\n", file_size);
 	{
 		printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
 		sendErr(comm_socket_fd, "500");
+		close(opened_file);
+		opened_file = -1;
 		return;
 	}
 printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
@@ -371,14 +388,18 @@ void Server::delete_methode(int comm_socket_fd)
 	char body_size[14], path[PATH_MAX];
 
 	concatPath();
-	if (remove(path) == 0)
+	if (std::remove(path) == 0)
 	{
 		// Fichier supprimé avec succès
 		send(comm_socket_fd, OK, strlen(OK), 0);
 	}
 	else
 	{
-		// Échec de la suppression du fichier
-        sendErr(comm_socket_fd, "500");
+		if (errno == EACCES)
+		{
+			sendErr(comm_socket_fd, "403");
+		}
+		else
+			sendErr(comm_socket_fd, "500");
 	}
 }

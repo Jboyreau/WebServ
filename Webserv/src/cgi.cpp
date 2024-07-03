@@ -74,10 +74,10 @@ void Server::exec_CGI(char *request, const std::string scriptPath, int size_body
 	//path = "/CGI/script.php?name=nassim&id=325435435";
 
  	env.push_back("REQUEST_METHOD=" + methode);
-    env.push_back("QUERY_STRING=" + parseQueryString(scriptPath));
+    env.push_back("QUERY_STRING=" + parseQueryString(path));
     env.push_back("SCRIPT_FILENAME=" + scriptPath);
     env.push_back("SERVER_PROTOCOL=HTTP/1.1");
-	env.push_back("REDIRECT_STATUS=1");
+	env.push_back("REDIRECT_STATUS=200");
 
 	if (methode == "POST")
 	{
@@ -86,12 +86,10 @@ void Server::exec_CGI(char *request, const std::string scriptPath, int size_body
 	}
 	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
     env.push_back("PATH_INFO=" + scriptPath);
-    env.push_back("REMOTE_ADDR=");
-    env.push_back("SERVER_PORT=");
+    //env.push_back("REMOTE_ADDR=");
+    //env.push_back("SERVER_PORT=");
     env.push_back("SERVER_NAME=WEBSERV");
     env.push_back("SERVER_SOFTWARE=WEBSERV/1.0");
-
-
 	for (std::vector<std::string>::const_iterator it = env.begin(); it != env.end(); ++it)
         CGIEnv.push_back(const_cast<char*>(it->c_str()));
 	
@@ -100,57 +98,46 @@ void Server::exec_CGI(char *request, const std::string scriptPath, int size_body
     if (execve(args[0], const_cast<char* const*>(args), CGIEnv.data()) == -1)
     {
         perror("execve failed");
+		exit(EXIT_FAILURE);
     }
 }
-
-bool set_up_CGI_file(char *CGIbodypath)
-{
-    int fd = open(CGIbodypath, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
-
-	if (fd == -1)
-	{
-        std::cerr << "Error opening CGI file" << std::endl;
-        return false;
-    }
-
-    dup2(fd, 1);
-	return true;
-}
-
 
 int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size, std::string &methode)
 {
-    pid_t pid;
- 	int cgi_input[2];
-    int cgi_output[2];
-    int file_fd, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
+	pid_t pid;
+	int file_fd, recv_bytes, wrote_bytes, i, j, total_recv_bytes, total_wrote_bytes;
+	int file_size = 0;
 
-    int file_size = 0;
-    if (methode == "POST")
-        file_size = get_fsize(request, comm_socket_fd);
-	pipe(cgi_input);
-    pipe(cgi_output);
+	if (methode == "POST")
+		file_size = get_fsize(request, comm_socket_fd);
+	if (pipe(cgi_input) == -1 || pipe(cgi_output) == -1)
+	{
+		std::cerr << RED << "Error : pipe fail "  << RESET << std::endl;
+		closePipe(cgi_output);
+		closePipe(cgi_input);
+		sendErr(comm_socket_fd, "500");
+		return -1;
+	}
 	pid = fork();
-    if (pid == -1)
-    {
-        perror("fork");
-        return -1;
-    }
-    else if (pid == 0)
-    {
-        dup2(cgi_output[1], STDOUT_FILENO);
-        dup2(cgi_input[0], STDIN_FILENO);
-        close(cgi_output[0]);
-        close(cgi_output[1]);
-        close(cgi_input[0]);
-        close(cgi_input[1]);
+	if (pid == -1)
+	{
+		std::cerr << RED << "Error : fork fail "  << RESET << std::endl;
+		closePipe(cgi_output);
+		closePipe(cgi_input);
+		sendErr(comm_socket_fd, "500");
+		return -1;
+	}
+	else if (pid == 0)
+	{
+		dup2(cgi_output[1], STDOUT_FILENO);
+		dup2(cgi_input[0], STDIN_FILENO);
+		closePipe(cgi_output);
+		closePipe(cgi_input);
 		exec_CGI(request,scriptPath,file_size, methode);
-	    exit(EXIT_FAILURE);
-    }
+		exit(EXIT_FAILURE);
+	}
 	else
 	{
-		close(cgi_output[1]);
-		close(cgi_input[0]);
 		if (methode == "POST")
 		{
 			for (int k = 0; k < body_chunk_size ; ++k)
@@ -185,20 +172,41 @@ int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath,
 			}
 			if (total_recv_bytes < file_size)
 			{
-				std::cout << "2" << std::endl;
+				std::cerr << RED << "Error : not all recv"  << RESET << std::endl;
+				closePipe(cgi_output);
+				closePipe(cgi_input);
 				sendErr(comm_socket_fd, "500");
 				return -1;
 			}
 		}
-
-		close(cgi_input[1]);
-
-		int status;
-
-		waitpid(pid, &status, 0);
+		closePipe(cgi_input);
+		close(cgi_output[1]);
+		cgi_output[1] = -1;
+		int status, time = 0, timeout = 10000000;
+		for (; time < timeout; ++time)
+		{
+			pid_t t = waitpid(pid, &status, WNOHANG);
+			if (t > 0)
+				break;
+		}
+		if (time == timeout)
+		{
+			kill(pid, SIGKILL);
+			sendErr(comm_socket_fd,"504");
+			closePipe(cgi_output);
+			closePipe(cgi_input);
+			return -1;
+		}
+		if (!WIFEXITED(status) || WEXITSTATUS(status) == EXIT_FAILURE)
+		{
+			std::cerr << RED << "Error : execve fail"  << RESET << std::endl;
+			closePipe(cgi_output);
+			closePipe(cgi_input);
+			sendErr(comm_socket_fd, "500");
+			return -1;
+		}
 	}
 	return cgi_output[0];
-
 }
 
 
@@ -221,10 +229,9 @@ void Server::readFromFileDescriptor(int fd_file, int *readbytes) {
 
 // Function to split the CGI response into HTTP header and body
 void Server::fillBody(int fd_file) {
-
     int readbytes = 0;
-    readFromFileDescriptor(fd_file, &readbytes);
 
+    readFromFileDescriptor(fd_file, &readbytes);
     // Find the position of the double CRLF which separates header and body
     header_size = ((size_t)(std::strstr(body,"\r\n\r\n") + 4));
     std::cout << "header size == " << header_size << std::endl;
@@ -244,18 +251,17 @@ void Server::fillBody(int fd_file) {
 }
 
 
-void Server::fill_header_cgi(char *body_size)
+void Server::fill_header_cgi(char *body_size, const char* first_value)
 {
 	const char *ext;
 	int key;
-
-	strcpy(response, "HTTP/1.1 200 OK\r\n");
-	strcat(response, "Server: My Personal HTTP Server\r\n");
-	strcat(response, "Content-Length: ");
+	std::strcpy(response, first_value);
+	std::strcat(response, "Server: My Personal HTTP Server\r\n");
+	std::strcat(response, "Content-Length: ");
 	itoa(size_body, body_size);
-	strcat(response, body_size);
-	strcat(response, "\r\n");
-	strcat(response, "Connection: close\r\n");
+	std::strcat(response, body_size);
+	std::strcat(response, "\r\n");
+	std::strcat(response, "Connection: close\r\n");
 	// DÃ©terminer le type de contenu en fonction de l'extension du fichier.	
     strncat(response, body, header_size);
 }
@@ -274,7 +280,7 @@ void Server::clean_path(std::string &request)
 
 void Server::respond_cgi()
 {
-	int header_len = strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, bytes_chunk_size, read_bytes, i;
+	int header_len = std::strlen(response), file_to_send_fd, total_sent_bytes, sent_bytes, bytes_chunk_size, read_bytes, i;
 
 	//Ouverture du fichier a envoyer:
 	//Envoi du header
@@ -287,8 +293,7 @@ void Server::respond_cgi()
 		total_sent_bytes += sent_bytes;
 	}
     char *body_cgi = body + header_size;
-
-printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
+	printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
 	i = 0;
 	sent_bytes = 0;
 	total_sent_bytes = 0;
@@ -299,8 +304,8 @@ printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
 		total_sent_bytes += sent_bytes * (sent_bytes > 0);
 		++i;
 	}
-printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
-	close(file_to_send_fd);
+	printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
+	closePipe(cgi_output);
 	memset(body, 0, total_sent_bytes);
 }
 
@@ -310,10 +315,10 @@ void Server::methode_CGI(char *header_end, int body_chunk_size, std::string &met
 	char body_size[14];
 	char CGIBodyPath[] = "./cgibody";
     std::string scriptPath;
-
 	struct stat st;
 /*1.Parsing du file path*/
     const char *msg = concatPath();
+
     if ((*request + *(request + 1)) == GET)
         clean_path(scriptPath);
     else
@@ -330,7 +335,7 @@ void Server::methode_CGI(char *header_end, int body_chunk_size, std::string &met
     fillBody(fd_cgi);
     	
 /*2.Remplir le header puis L'envoyer avec le body*/
-		fill_header_cgi(body_size);
+		fill_header_cgi(body_size, msg);
         std::cout << GREEN << "\n####Fill header cgi result ####:\n" << response << RESET << std::endl;
 		respond_cgi();
 		return;

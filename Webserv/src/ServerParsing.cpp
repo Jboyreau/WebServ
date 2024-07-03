@@ -52,6 +52,7 @@ bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>:
 	/*RULE : SERVER END rPort() rIp() rName() rError() rLocation() SERVER ou .end()*/
 	//Verification du nombre de token.
 
+	(*(cnf + server_index)).error_map["400"] = E400;
 	(*(cnf + server_index)).error_map["411"] = E411;
 	(*(cnf + server_index)).error_map["413"] = E413;
 	(*(cnf + server_index)).error_map["403"] = E403;

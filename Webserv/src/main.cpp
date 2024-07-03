@@ -17,6 +17,7 @@ int main(void)
 	signal(SIGINT, signalHandler);  // gere Ctrl+C.
 	signal(SIGTERM, signalHandler); // gere termination request.
 	signal(SIGSEGV, signalHandler); // gere segmentation fault.
+	
 	serverInstance = new Server();
 	serverInstance->run();
 	delete serverInstance;

@@ -47,6 +47,7 @@
 #define YELLOW "\033[1;33m" //Debug
 #define GREEN "\033[1;32m" //Info
 #define RESET "\033[0m"
+#define E400 "./error/400.html"
 #define E403 "./error/403.html"
 #define E404 "./error/404.html"
 #define E405 "./error/405.html"
@@ -58,6 +59,7 @@
 #define E504 "./error/504.html"
 #define OK "HTTP/1.1 200 OK\r\n"
 #define H301 "HTTP/1.1 301 Moved Permanently\r\n"
+#define H400 "HTTP/1.1 400 Bad Request\r\n"
 #define H404 "HTTP/1.1 404 Not Found\r\n"
 #define H403 "HTTP/1.1 403 Forbidden\r\n"
 #define H405 "HTTP/1.1 405 Method Not Allowed\r\n"
@@ -93,6 +95,8 @@ class Server
 		std::map<std::string, std::string> http_error_map;
 		std::string location_key;
 		std::string location_key2;
+		int cgi_input[2];
+		int cgi_output[2];
 		t_config cnf[MAX_VSERVER];
 		t_config conf;
 		t_location temp;
@@ -100,6 +104,7 @@ class Server
 		char request[HTTP_HEADER_SIZE];
 		char path[PATH_MAX];
 		int *virtual_servers[MAX_VSERVER];
+		DIR *directory;
 		struct sockaddr_in client_addr;
 		struct timeval timeout;
 		fd_set readfds;
@@ -144,7 +149,8 @@ class Server
 		void setNonBlocking(int socket);
 		bool canAccessDirectory(const char *path);
 		bool canAccessFile(const char *path, int flag);
-		//TEMP
+		void closePipe(int *pipe);
+		//GET POST DELETE
 		void post_methode(char *header_end, int comm_socket_fd, int body_chunk_size);
 		void respond(const char *path, int client_socket_fd, int file_size);
 		void get_methode(int comm_socket_fd);
@@ -155,13 +161,14 @@ class Server
 		void sendErr(int comm_socket_fd, std::string code);
 		int get_fsize(char *request, int comm_socket_fd);
 		bool findLongestMatchingPath(const char* location_key, std::map<std::string, t_location> &location_map, t_location &location);
+		std::string generateAutoIndex(const std::string &path);
 		//CGI
 		void methode_CGI(char *header_end, int body_chunk_size, std::string &methode);
 		void exec_CGI(char *request, const std::string scriptPath, int size_body, std::string &methode);
 		void respond_cgi(char* header, char *body_cgi, int client_socket_fd, int file_size);
 		void readFromFileDescriptor(int fd_file, int *readbytes);
 		void fillBody(int fd_file);
-		void fill_header_cgi(char *body_size);
+		void fill_header_cgi(char *body_size, const char *first_value);
 		void respond_cgi();
 		int  manage_CGI(char *request, std::string scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size, std::string &methode);
 		void clean_path(std::string &request);

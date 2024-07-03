@@ -95,6 +95,24 @@
                         echo "<p>Unable to open comments file for writing.</p>";
                     }
                 }
+                else if ($_SERVER['REQUEST_METHOD'] == 'GET') {
+
+                    if (isset($_GET['name']) && isset($_GET['comment'])) {
+                        $name = htmlspecialchars($_GET['name'], ENT_QUOTES, 'UTF-8');
+                        $comment = htmlspecialchars($_GET['comment'], ENT_QUOTES, 'UTF-8');
+                        // Append comment to comments.txt
+                        $file = fopen('comments.txt', 'a');
+                        if ($file) {
+                            fwrite($file, "<div class='comment'><h4>$name</h4><p>$comment</p></div>\n");
+                            fclose($file);
+                        } else {
+                            echo "<p>Unable to open comments file for writing.</p>";
+                        }
+                    }
+                    else {
+                        echo "<p>Missing 'name' or 'comment' parameter.</p>";
+                    }
+                }
 
                 // Display comments
                 if (file_exists('comments.txt')) {
