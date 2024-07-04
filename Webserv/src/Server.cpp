@@ -174,18 +174,12 @@ bool Server::findLongestMatchingPath(const char* location_key, std::map<std::str
 	
 	dir = (*current_path_end == '/');
 	test_php = (std::strstr(location_key2.c_str(), ".php ") || std::strstr(location_key2.c_str(), ".php?"));
-
-	std::cout << YELLOW << "$$$$$$$$ location.key $$$$$$$$\n" << location_key << RESET << std::endl;
-	std::cout << YELLOW << "$$$$$$$$ test_php $$$$$$$$\n" << test_php << RESET << std::endl;
-
 	loc_len = 0;
 	while (current_path != current_path_end)
 	{
-		std::cout << YELLOW << "DEBUG : loop current_path = " << current_path << RESET << std::endl;
 		if (location_map.find(current_path) != location_map.end())
 		{
 			location = location_map[current_path];
-			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
 			loc_len = std::strlen(current_path);
 			return true;
 		}
@@ -200,7 +194,6 @@ bool Server::findLongestMatchingPath(const char* location_key, std::map<std::str
 		if (location_map.find(current_path) != location_map.end())
 		{
 			location = location_map[current_path];
-			std::cout << YELLOW << "DEBUG : found current_path = " << current_path << RESET << std::endl;
 			loc_len = std::strlen(current_path);
 			return true;
 		}	
@@ -219,7 +212,6 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			std::cerr << RED << "Error : accept error : " << errno << RESET << std::endl;
 			return ;
 		}
-		std::cout << GREEN << "Connection accepted from client : " << comm_socket_fd << RESET << std::endl;
 		/*
 		   fds_buffer est mis a jours avec comm_socket_fd,
 		   chaque virtual_server (virtual_servers[i])
@@ -257,24 +249,23 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			int total_recv_bytes = 0;
 			int recv_bytes = 0;
 			char *header_end = NULL;
-			int time_cout = 0;
-			while (total_recv_bytes < HTTP_HEADER_SIZE && header_end == NULL && time_cout < TIMEOUT)
+			int time_count = 0;
+			while (total_recv_bytes < HTTP_HEADER_SIZE && header_end == NULL && time_count < TIMEOUT)
 			{
 				recv_bytes = recv(comm_socket_fd, request + total_recv_bytes, HTTP_HEADER_SIZE, 0);
 				header_end = std::strstr(request, "\r\n\r\n");
 				total_recv_bytes += recv_bytes * (recv_bytes > 0);
-				++time_cout;
+				++time_count;
 			}	
 			if (total_recv_bytes == 0)
 			{
-				std::cout << GREEN << "Communication ended by EMPTY MESSAGE with Client" << comm_socket_fd << RESET << std::endl;
 				close(comm_socket_fd);
 				*(fds_buffer + i) = -1;
 				break;
 			}
-			if (time_cout >= TIMEOUT)
+			if (time_count >= TIMEOUT)
 			{
-				std::cout << RED << "Error : recv header failed."<< RESET << std::endl;
+				std::cerr << RED << "Error : recv header failed."<< RESET << std::endl;
 				sendErr(comm_socket_fd, "500");
 				close(comm_socket_fd);
 				*(fds_buffer + i) = -1;
@@ -282,7 +273,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			}
 			if (header_end == NULL)
 			{
-				std::cout << RED << "Error : wrong header."<< RESET << std::endl;
+				std::cerr << RED << "Error : wrong header."<< RESET << std::endl;
 				sendErr(comm_socket_fd, "400");
 				close(comm_socket_fd);
 				*(fds_buffer + i) = -1;
@@ -292,14 +283,12 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			char *ptr = NULL;
 			if (*(virtual_servers[server_index] + MAX_CLIENT + 1) == 1)
 			{
-				std::cout << YELLOW << "DEUBUG DUPLICATE" << RESET << std::endl;
 				if ((ptr = std::strstr(request, "Host")) != NULL)
 				{
 					int name_len = 0;
 					for (ptr += 6; *(ptr + name_len) != ':'; ++name_len)
 						;
 					std::string name(ptr, name_len);
-					std::cout << YELLOW << "DEBUG : NAME = " << name << RESET << std::endl;
 					int j;
 					for (j = 0; j < cnf_len; ++j)
 						if (*(virtual_servers[j]) == master_sock_tcp_fd && cnf[j].name_map.find(name) != cnf[j].name_map.end())
@@ -314,14 +303,12 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 								conf = cnf[cnf[j].name_map[name]];
 								break;
 							}
-					std::cout << YELLOW << "DEBUG : Config Index = " << j << RESET << std::endl;
 				}
 			}
 			//Initialiser le pointeur de fin du header et la taille du body chunk.
 			header_end += 4;
 			int body_chunk_size = total_recv_bytes - (header_end - request);
-			std::cout << GREEN << "Recvd bytes = " << total_recv_bytes << " from client " << comm_socket_fd << RESET << std::endl;
-			std::cout << YELLOW << "\n####REQUEST CONTENT####:\n" << request << RESET << std::endl;
+			//std::cerr << YELLOW << "\n####REQUEST CONTENT####:\n" << request << RESET << std::endl;
 			//Trouver le path.
 			int loc_len = 0;
 			int j;
@@ -337,12 +324,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 			//Trouver la bonne location.
 			if (conf.location_map.size() != 0)
 			{
-				std::cout << GREEN << "LocationKey : " << location_key << RESET << std::endl;
-				if (findLongestMatchingPath(location_key.c_str(), conf.location_map, temp))
-				{
-					std::cout << GREEN << "LocationPath_ : " << location_key << RESET << std::endl;
-				}
-				else
+				if (findLongestMatchingPath(location_key.c_str(), conf.location_map, temp) == false)
 				{
 					temp.method_map["GET"] = true;
 					temp.method_map["POST"] = true;
@@ -351,7 +333,6 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 					std::strcpy(temp.index, DEFAULT_INDEX_PATH);
 					std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);
 					memset(temp.ret, 0, PATH_MAX);
-					std::cout << GREEN << "LocationPath0 : " << "default" << RESET << std::endl;
 				}
 			}
 			else
@@ -363,45 +344,34 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 				std::strcpy(temp.index, DEFAULT_INDEX_PATH);
 				std::strcpy(temp.cgi_path, DEFAULT_CGI_PATH);
 				memset(temp.ret, 0, PATH_MAX);
-				std::cout << GREEN << "LocationPath1 : " << "default" << RESET << std::endl;
 			}
-			//Afficher location params.
-			std::cout << GREEN << "\tLocation : "<< RESET << std::endl;
-			if (temp.method_map.find("GET") != temp.method_map.end())
-				std::cout << GREEN << "\t\t\"GET\" " << temp.method_map["GET"] << RESET << std::endl;
-			if (temp.method_map.find("POST") != temp.method_map.end())
-				std::cout << GREEN << "\t\t\"POST\" " << temp.method_map["POST"] << RESET << std::endl;
-			if (temp.method_map.find("DELETE") != temp.method_map.end())
-				std::cout << GREEN << "\t\t\"DELETE\" " << temp.method_map["DELETE"] << RESET << std::endl;
-			std::cout << GREEN << "\t\tROOT : " << temp.root << RESET << std::endl;
-			std::cout << GREEN << "\t\tAUTOINDEX : " << temp.autoindex << RESET << std::endl;
-			std::cout << GREEN << "\t\tINDEX : " << temp.index << RESET << std::endl;
-			std::cout << GREEN << "\t\tCGIPATH : " << temp.cgi_path << RESET << std::endl;
-			std::cout << GREEN << "\t\tRETURN : " << temp.ret << RESET << std::endl;
 			//servir le client.
 			int methode_len;
 			for (methode_len = 0; *(request + methode_len) != ' ' && methode_len < HTTP_HEADER_SIZE; ++methode_len)
 				;
 			std::string methode_key(request, methode_len);
-			std::cout << RED << "Methode key :" << methode_key << RESET <<std::endl;
 			if (test_php)
 			{
 				if (temp.method_map.find(methode_key) != temp.method_map.end())
 				{
 					methode_CGI(header_end, body_chunk_size, methode_key);
-					std::cout << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
+					//std::cerr << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
 					close(comm_socket_fd);
 					*(fds_buffer + i) = -1;
-					std::cout << GREEN << "Communication socket closed" << RESET << std::endl;
-					return;				
+					//std::cerr << GREEN << "Communication socket closed" << RESET << std::endl;
+					continue ;
 				}
 				else
 				{
-					std::cout << RED << "Error : GET not allowed" << RESET << std::endl;//send error method not allowed
+					//std::cerr << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
+					close(comm_socket_fd);
+					*(fds_buffer + i) = -1;
+					std::cerr << RED << "Error : GET not allowed" << RESET << std::endl;//send error method not allowed
 					sendErr(comm_socket_fd, "405"); //error
+					continue ;
 				}
-					
-				}
+
+			}
 			switch (*request + *(request + 1))
 			{
 				case GET :
@@ -413,7 +383,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 						}
 						else
 						{
-							std::cout << RED << "Error : GET not allowed" << RESET << std::endl;//send error method not allowed
+							std::cerr << RED << "Error : GET not allowed" << RESET << std::endl;//send error method not allowed
 							sendErr(comm_socket_fd, "405"); //error
 						}
 					}	
@@ -425,7 +395,7 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 					}
 					else
 					{
-						std::cout << RED << "Error : POST not allowed" << RESET << std::endl;//send error method not allowed
+						std::cerr << RED << "Error : POST not allowed" << RESET << std::endl;//send error method not allowed
 						sendErr(comm_socket_fd, "405"); //error
 					}
 					break;
@@ -436,18 +406,17 @@ void Server::acceptServe(int *fds_buffer, int master_sock_tcp_fd)
 					}
 					else
 					{
-						std::cout << RED << "Error : DELETE not allowed" << std::endl;//send error method not allowed
+						std::cerr << RED << "Error : DELETE not allowed" << std::endl;//send error method not allowed
 						sendErr(comm_socket_fd, "405"); //error
 					}
 					break;
 				default :
-					std::cout << RED << "Error : unknown methode" << RESET << std::endl;//send error method not handeled
+					std::cerr << RED << "Error : unknown methode" << RESET << std::endl;//send error method not handeled
 					sendErr(comm_socket_fd, "405"); //error
 			}
-			std::cout << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
+			//std::cerr << YELLOW << "\n####RESPONSE CONTENT####:" << response << RESET << std::endl;
 			close(comm_socket_fd);
 			*(fds_buffer + i) = -1;
-			std::cout << GREEN << "Communication socket closed" << RESET << std::endl;
 		}
 	}
 }

@@ -19,6 +19,7 @@ int Server::get_fsize(char *request, int comm_socket_fd)
 	if (!content_length_str)
 	{
 		// Error: No Content-Length found
+		std::cerr << RED << "Error : no content-length."  << RESET << std::endl;
 		sendErr(comm_socket_fd, "411");
 		return -1;
 	}
@@ -26,6 +27,7 @@ int Server::get_fsize(char *request, int comm_socket_fd)
 	len = atoi(content_length_str);
 	if (len > conf.max_body_size)
 	{
+		std::cerr << RED << "Error : wrong size."  << RESET << std::endl;
 		sendErr(comm_socket_fd, "413");
 		return -1;
 	}
@@ -47,7 +49,6 @@ const char *Server::concatPath(void)
 			ptr = ptr + i + 1;
 		std::strcpy(path, temp.root);
 		std::strcat(path, ptr);
-		std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 		return OK;
 	}
 	ptr = temp.ret;
@@ -58,20 +59,12 @@ const char *Server::concatPath(void)
 	if (*(ptr + i) == '/')
 		ptr = ptr + i + 1;
 	std::strcpy(path, temp.root);
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 	std::strcat(path, ptr);
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 	ptr = location_key.c_str();
-	std::cout << YELLOW << "pre loop ptr = " << ptr << RESET << std::endl;
-	std::cout << YELLOW << "Location len =" << loc_len << RESET << std::endl;
 	for (i = 0; i < loc_len; ++i)
 		;
 	ptr = ptr + i;
-	std::cout << YELLOW << " post loop ptr + i = " << *(ptr + i) << RESET << std::endl;
-	std::cout << YELLOW << " post loop ptr = " << ptr << RESET << std::endl;
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 	std::strcat(path, ptr);
-	std::cout << YELLOW << "PATH = " << path << RESET << std::endl;
 	return H301;
 }
 
@@ -102,7 +95,6 @@ void Server::fillHeader(const char *first_field, const char *path, char* body_si
 	if (ext != NULL)
 	{
 		key = keygen(ext);
-		printf("*DEBUG! EXT = %s\r\n", ext);
 		switch (key)
 		{
 			case HTML_KEY:
@@ -179,11 +171,16 @@ void Server::respond(const char *path, int client_socket_fd, int file_size)
 	opened_file = open(path, O_RDONLY);
 	if (opened_file < 0)
 	{
-		printf("Error: unable to open %s\n", path);
 		if (errno == EACCES)
+		{
+			std::cerr << RED << "Error : remove access denied."  << RESET << std::endl;
 			sendErr(comm_socket_fd, "403");
+		}
 		else
+		{
+			std::cerr << RED << "Error : internal server error."  << RESET << std::endl;
 			sendErr(comm_socket_fd, "500");
+		}
 		return; //error
 	}
 	//Envoi du header.
@@ -198,7 +195,6 @@ void Server::respond(const char *path, int client_socket_fd, int file_size)
 		++i;
 	}
 	//Envoi du fichier
-	printf("RESPOND DEBUG: file_size = %d\n", file_size);
 	read_bytes = 0;
 	total_read_bytes = 0;
 	i = 0;
@@ -219,12 +215,11 @@ void Server::respond(const char *path, int client_socket_fd, int file_size)
 	}
 	if (total_read_bytes < file_size)
 	{
-		sendErr(comm_socket_fd, "500");
+		std::cerr << RED << "Error : read."  << RESET << std::endl;
 		close(opened_file);
 		opened_file = -1;
 		return;
 	}
-	printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
 	close(opened_file);
 	opened_file = -1;
 }
@@ -296,7 +291,10 @@ void Server::get_methode(int comm_socket_fd)
 			}
 		}
 		else
+		{
+			std::cerr << RED << "Error : open dir failed."  << RESET << std::endl;
         	sendErr(comm_socket_fd, "500");
+		}
 	}
 	else if (result == 0 && (st.st_mode & S_IFMT) == S_IFREG) //fichier existe
 	{
@@ -309,7 +307,10 @@ void Server::get_methode(int comm_socket_fd)
 		respond(temp.index, comm_socket_fd, st.st_size);
 	}
 	else //index was a lie.
+	{
+		std::cerr << RED << "Error : index doesn't exist."  << RESET << std::endl;
 		sendErr(comm_socket_fd, "404");
+	}
 	dir = 0;
 }
 
@@ -330,15 +331,17 @@ void Server::post_methode(char *header_end, int comm_socket_fd, int body_chunk_s
     if (opened_file < 0)
     {
 		if (errno == EACCES)
+		{
+			std::cerr << RED << "Error : access denied."  << RESET << std::endl;
 			sendErr(comm_socket_fd, "403");
+		}
 		else
+		{
+			std::cerr << RED << "Error : open failed."  << RESET << std::endl;
 			sendErr(comm_socket_fd, "500");
-        printf("Error : unable to create %s\n", path);
+		}
         return;
     }
-	//Recevoir le fichier.
-printf("POST DEBUG body_chunk_size = %d\n",body_chunk_size);
-printf("POST DEBUG file_size = %d\n", file_size);
 	//Ecrire le morceau de body en trop.
 	for (int k = 0; k < body_chunk_size; ++k)
 		*(body + k) = *(header_end + k);
@@ -371,13 +374,12 @@ printf("POST DEBUG file_size = %d\n", file_size);
     }
 	if (total_recv_bytes < file_size)
 	{
-		printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
+		std::cerr << RED << "Error : recv failed."  << RESET << std::endl;
 		sendErr(comm_socket_fd, "500");
 		close(opened_file);
 		opened_file = -1;
 		return;
 	}
-printf("POST DEBUG total_recv_bytes = %d\n", total_recv_bytes);
     close(opened_file);
 	opened_file = -1;
 	send(comm_socket_fd, msg, strlen(msg), 0);
@@ -397,9 +399,13 @@ void Server::delete_methode(int comm_socket_fd)
 	{
 		if (errno == EACCES)
 		{
+			std::cerr << RED << "Error : remove access denied."  << RESET << std::endl;
 			sendErr(comm_socket_fd, "403");
 		}
 		else
+		{
+			std::cerr << RED << "Error : remove."  << RESET << std::endl;
 			sendErr(comm_socket_fd, "500");
+		}
 	}
 }

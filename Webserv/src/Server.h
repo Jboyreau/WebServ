@@ -166,8 +166,8 @@ class Server
 		void methode_CGI(char *header_end, int body_chunk_size, std::string &methode);
 		void exec_CGI(char *request, const std::string scriptPath, int size_body, std::string &methode);
 		void respond_cgi(char* header, char *body_cgi, int client_socket_fd, int file_size);
-		void readFromFileDescriptor(int fd_file, int *readbytes);
-		void fillBody(int fd_file);
+		int readFromFileDescriptor(int fd_file, int *readbytes);
+		int fillBody(int fd_file);
 		void fill_header_cgi(char *body_size, const char *first_value);
 		void respond_cgi();
 		int  manage_CGI(char *request, std::string scriptPath, char *CGIbodypath, char *header_end, int body_chunk_size, std::string &methode);

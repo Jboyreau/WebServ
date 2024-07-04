@@ -144,7 +144,6 @@ int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath,
 				*(body + k) = *(header_end + k);
 			total_recv_bytes = 0;
 			i = 0;
-			printf("POST DEBUG file_size = %d\n", file_size);
 			//Chargement du buffer avec recv.
 			bool b = false;
 			while (total_recv_bytes < file_size && i < TIMEOUT)
@@ -191,6 +190,7 @@ int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath,
 		}
 		if (time == timeout)
 		{
+			std::cerr << RED << "Error : Timeout exec cgi"  << RESET << std::endl;
 			kill(pid, SIGKILL);
 			sendErr(comm_socket_fd,"504");
 			closePipe(cgi_output);
@@ -211,7 +211,7 @@ int Server::manage_CGI(char *request, std::string scriptPath, char *CGIbodypath,
 
 
 // Helper function to read all data from a file descriptor
-void Server::readFromFileDescriptor(int fd_file, int *readbytes) {
+int Server::readFromFileDescriptor(int fd_file, int *readbytes) {
     ssize_t bytesRead = 0;
 
     while ((bytesRead = read(fd_file, body + bytesRead, BUFFER_SIZE << 3)) > 0) {
@@ -219,35 +219,35 @@ void Server::readFromFileDescriptor(int fd_file, int *readbytes) {
     }
     if (bytesRead == -1)
     {
-      std::cout << "3" << std::endl;
+		std::cerr << RED << "Error : read error" << RESET << std::endl;
         sendErr(comm_socket_fd, "500");
+		closePipe(cgi_output);
+		return (1);
     }
-    close (fd_file);
+	closePipe(cgi_output);
+	return (0);
 }
 
 ///////// TRANF LE FILE CONT DANS BODY //////////
 
 // Function to split the CGI response into HTTP header and body
-void Server::fillBody(int fd_file) {
+int Server::fillBody(int fd_file) {
     int readbytes = 0;
 
-    readFromFileDescriptor(fd_file, &readbytes);
+    if (readFromFileDescriptor(fd_file, &readbytes))
+		return (-1);
     // Find the position of the double CRLF which separates header and body
     header_size = ((size_t)(std::strstr(body,"\r\n\r\n") + 4));
-    std::cout << "header size == " << header_size << std::endl;
     header_size -= ((size_t)body);
-     std::cout << "header size 2 == " << header_size << std::endl;
-
     if (header_size == -((size_t)body)) 
     {
-        std::cerr << "Invalid CGI response: No header-body separator found" << std::endl;
-        return ;
+        std::cerr << RED << "Error : wrong header."<< RESET << std::endl;
+		sendErr(comm_socket_fd, "400");
+		closePipe(cgi_output);
+        return (-1);
     }
     size_body = readbytes - header_size;
-    std::cout << RED << "******* INFO SIZE ***********\n" << "size body = " << size_body << "\nreadbytes = " << readbytes << "\nheader_size = " << header_size << std::endl;
-  
-
-    return ;
+    return (0);
 }
 
 
@@ -274,8 +274,6 @@ void Server::clean_path(std::string &request)
     for (; *(path + i + j) != '\n' && *(path + i + j) != ' ' && *(path + i + j) != '?' && *(path + i + j); ++j)
         request += *(path + i + j);
     request += "\0";
-
-    printf("FIND PATH DEBUG! EXTRACTED PATH = %s\n", path);
 }
 
 void Server::respond_cgi()
@@ -293,7 +291,6 @@ void Server::respond_cgi()
 		total_sent_bytes += sent_bytes;
 	}
     char *body_cgi = body + header_size;
-	printf("RESPOND DEBUG: total_read_bytes = %d\n", total_sent_bytes);
 	i = 0;
 	sent_bytes = 0;
 	total_sent_bytes = 0;
@@ -304,7 +301,6 @@ void Server::respond_cgi()
 		total_sent_bytes += sent_bytes * (sent_bytes > 0);
 		++i;
 	}
-	printf("RESPOND DEBUG: total_sent_bytes = %d\n", total_sent_bytes);
 	closePipe(cgi_output);
 	memset(body, 0, total_sent_bytes);
 }
@@ -323,23 +319,20 @@ void Server::methode_CGI(char *header_end, int body_chunk_size, std::string &met
         clean_path(scriptPath);
     else
         scriptPath = path;
-       std::cout << GREEN << "%%%%%%%%%%%%%%%%%%%%%% scriptPath:  " << scriptPath << "\npath : "<< path  << RESET << std::endl;
     if (stat(scriptPath.c_str(), &st) == -1)
     {
+		std::cerr << RED << "Error : is not a file."  << RESET << std::endl;
         sendErr(comm_socket_fd,"404");
         return;
     }
 	int fd_cgi = manage_CGI(request, scriptPath, CGIBodyPath, header_end, body_chunk_size, methode);
     if (fd_cgi == -1)
         return;
-    fillBody(fd_cgi);
-    	
+    if (fillBody(fd_cgi) == -1)
+		return ;
 /*2.Remplir le header puis L'envoyer avec le body*/
 		fill_header_cgi(body_size, msg);
-        std::cout << GREEN << "\n####Fill header cgi result ####:\n" << response << RESET << std::endl;
 		respond_cgi();
 		return;
-	
-
 	send(comm_socket_fd, "", 0, 0);
 }

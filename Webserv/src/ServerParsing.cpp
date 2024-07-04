@@ -20,7 +20,6 @@ bool Server::parsing(void)
 			if ((*it).type == SERVER)
 			{
 				(*(cnf + server_index)).max_body_size = MAX_BODY_SIZE;
-				std::cout << GREEN << "\nVIRTUAL SERVER " << server_index << " CONFIGURATION : " << std::endl;
 				parsing_result = ruleServer(token_liste, it, line);
 			}
 			else
@@ -88,7 +87,7 @@ bool Server::ruleServer(std::vector<t_token> &token_liste, std::vector<t_token>:
 				return true;
 			if ((*it).type == SERVER)
 				return true;
-			return printf("yo\n"),configErr(it, line);
+			return configErr(it, line);
 		}
 		return configErr(it, line);
 	}
@@ -115,7 +114,6 @@ bool Server::rulePort(std::vector<t_token> &token_liste, std::vector<t_token>::i
 					if (is_valid_port_number(it + 1, port) == true)
 					{
 						(*(cnf + server_index)).server_addr.sin_port = port;
-						std::cout << GREEN << "\tPort : " << ntohs((*(cnf + server_index)).server_addr.sin_port) << RESET << std::endl;
 						//skip PORT WORD END.
 						it += 3;
 						//increment de line.
@@ -157,9 +155,7 @@ bool Server::ruleIp(std::vector<t_token> &token_liste, std::vector<t_token>::ite
 					if ((ip = ftInetAddr(it + 1)) != INADDR_NONE)
 					{
 						(*(cnf + server_index)).server_addr.sin_addr.s_addr = ip;
-						std::cout << GREEN << "\tIpv4 : " << ntohl((*(cnf + server_index)).server_addr.sin_addr.s_addr) << RESET << std::endl;
 						(*(cnf + server_index)).server_addr.sin_family = AF_INET;
-						std::cout << GREEN << "\tFamily : " << (*(cnf + server_index)).server_addr.sin_family << RESET << std::endl;
 						//skip IP WORD END
 						it += 3;
 						//increment de line.
@@ -217,8 +213,6 @@ bool Server::ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::
 				//Ajout de server name dans un vecteur de char.
 				std::string name((*it).str, (*it).len);
 				(*(cnf + server_index)).name_map[name] = server_index;
-				std::cout << GREEN << "\tName Key: " << name << RESET << std::endl;
-				std::cout << GREEN << "\tName map Content : " << (*(cnf + server_index)).name_map[name] << RESET << std::endl;
 				//skip WORD END.
 				it += 2;
 				//increment de line;
@@ -230,8 +224,6 @@ bool Server::ruleName_(std::vector<t_token> &token_liste, std::vector<t_token>::
 				//Ajout de server name dans un vecteur de char.
 				std::string name((*it).str, (*it).len);
 				(*(cnf + server_index)).name_map[name] = server_index;
-				std::cout << GREEN << "\tName Key: " << name << RESET << std::endl;
-				std::cout << GREEN << "\tName map Content : " << (*(cnf + server_index)).name_map[name] << RESET << std::endl;
 				//skip WORD.
 				++it;
 				//Recursion.
@@ -273,8 +265,6 @@ bool Server::ruleError(std::vector<t_token> &token_liste, std::vector<t_token>::
 						std::string error_path((*(it + 2)).str, (*(it + 2)).len);
 						// Ajout du code d'erreur et de l'URI à la map d'erreurs
 						(*(cnf + server_index)).error_map[error_code] = error_path;
-						std::cout << GREEN << "\tHTTP Error map Key: " << error_code << RESET << std::endl;
-						std::cout << GREEN << "\tHTTP Error map Content : " << (*(cnf + server_index)).error_map[error_code] << RESET << std::endl;
 						//skip ERR WORD WORD END.
 						it += 4;
 						//increment de line.
@@ -319,7 +309,6 @@ bool Server::ruleSize(std::vector<t_token> &token_liste, std::vector<t_token>::i
 					//Affectation de la taille à cnf.
 					if (((*(cnf + server_index)).max_body_size = atoi((*(it + 1)).str)) <= MAX_BODY_SIZE)
 					{
-						std::cout << GREEN << "\tMax_body_size " << (*(cnf + server_index)).max_body_size << RESET << std::endl;
 						//skip IP WORD END
 						it += 3;
 						//increment de line.
@@ -377,18 +366,6 @@ bool Server::ruleLocation(std::vector<t_token> &token_liste, std::vector<t_token
 				return false;
 			//Affectation de temp a location map.
 			(*(cnf + server_index)).location_map[location_key] = temp;
-			std::cout << GREEN << "\tLocationPath : " << location_key << RESET << std::endl;
-			if ((*(cnf + server_index)).location_map[location_key].method_map.find("GET") != (*(cnf + server_index)).location_map[location_key].method_map.end())
-        		std::cout << GREEN << "\t\t\"GET\" " << (*(cnf + server_index)).location_map[location_key].method_map["GET"] << RESET << std::endl;
-			if ((*(cnf + server_index)).location_map[location_key].method_map.find("POST") != (*(cnf + server_index)).location_map[location_key].method_map.end())
-        		std::cout << GREEN << "\t\t\"POST\" " << (*(cnf + server_index)).location_map[location_key].method_map["POST"] << RESET << std::endl;
-			if ((*(cnf + server_index)).location_map[location_key].method_map.find("DELETE") != (*(cnf + server_index)).location_map[location_key].method_map.end())
-        		std::cout << GREEN << "\t\t\"DELETE\" " << (*(cnf + server_index)).location_map[location_key].method_map["DELETE"] << RESET << std::endl;
-			std::cout << GREEN << "\t\tROOT : " << (*(cnf + server_index)).location_map[location_key].root << RESET << std::endl;
-			std::cout << GREEN << "\t\tAUTOINDEX : " << (*(cnf + server_index)).location_map[location_key].autoindex << RESET << std::endl;
-			std::cout << GREEN << "\t\tINDEX : " << (*(cnf + server_index)).location_map[location_key].index << RESET << std::endl;
-			std::cout << GREEN << "\t\tCGIPATH : " << (*(cnf + server_index)).location_map[location_key].cgi_path << RESET << std::endl;
-			std::cout << GREEN << "\t\tRETURN : " << (*(cnf + server_index)).location_map[location_key].ret << RESET << std::endl;
 			//Recursion
 			return ruleLocation(token_liste, it, line);
 			//Test du token de fin de bloc, SERVER ou fin de vecteur.
@@ -412,8 +389,6 @@ bool Server::ruleMethode(std::vector<t_token> &token_liste, std::vector<t_token>
 		}
 		return configErr(it, line);
 	}
-	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
-	std::cerr << RESET << std::endl;
 	return false;
 }
 
@@ -453,8 +428,6 @@ bool Server::ruleMethode_(std::vector<t_token> &token_liste, std::vector<t_token
 		}
 		return configErr(it, line);
 	}
-	std::cerr << RED << "Error Config : line " << line << "not enough tokens.";
-	std::cerr << RESET << std::endl;
 	return false;
 }
 
@@ -478,7 +451,6 @@ bool Server::ruleRoot(std::vector<t_token> &token_liste, std::vector<t_token>::i
 						*(temp.root + i) = *((*(it + 1)).str + i);
 					if (i == PATH_MAX)
 					{
-						std::cerr << RED << "Error Config : line " << line << ' ';
 						std::cerr.write((*(it + 1)).str, (*(it + 1)).len);
 						std::cerr << " is longer than PATH_MAX.";
 						std::cerr << RESET << std::endl;
